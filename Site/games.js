@@ -1,4 +1,5 @@
 var games = [
+    {name: "Autobahn Outlaws", path: "games/autobahn-outlaws/index.html"},
     {name: "Flappy Bird", path: "games/flappybird/index.html"}
 ];
 

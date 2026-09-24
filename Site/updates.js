@@ -1,4 +1,5 @@
 var updates = [
+    {message: "New game: Autobahn Outlaws - an open-world crime game across all of Germany!"},
     {message: "Welcome to the 3rd official release of Andyum!"}
 ];
 var updatespage = document.getElementById("updatespage");

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Autobahn Outlaws — an open-world crime action game across all of Germany. Drive the Autobahn, steal cars, fly helicopters and take on the police from Hamburg to the Alps. Runs in your browser.">
+  <meta name="theme-color" content="#111111">
+  <meta property="og:title" content="Autobahn Outlaws">
+  <meta property="og:description" content="Open-world crime action across Germany. No speed limit.">
+  <title>Autobahn Outlaws</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='22' fill='%23111'/%3E%3Crect y='21' width='64' height='22' fill='%23d00'/%3E%3Crect y='42' width='64' height='22' fill='%23fc0'/%3E%3Cpath d='M32 8l6 16h17l-14 10 5 17-14-10-14 10 5-17L9 24h17z' fill='%23fff' stroke='%23000' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- ================= HUD ================= -->
+  <div id="hud" class="hidden">
+    <div id="hud-dmg"></div>
+    <div id="hud-topright">
+      <div id="hud-clock">08:30</div>
+      <div id="hud-money">€0</div>
+      <div id="hud-money-pop"></div>
+      <div id="hud-stars"></div>
+      <div id="hud-weaponbox"><div id="hud-weapon"></div><div id="hud-ammo"></div></div>
+    </div>
+    <div id="hud-notify"></div>
+    <div id="hud-objective"></div>
+    <div id="hud-timer"></div>
+    <div id="hud-counter"></div>
+    <div id="hud-minimapwrap">
+      <canvas id="minimap" width="220" height="220"></canvas>
+      <div id="hud-bars"><div class="bar hp"><div id="hud-health"></div></div><div class="bar ar"><div id="hud-armor"></div></div></div>
+    </div>
+    <div id="hud-area"><div id="hud-area-name"></div><div id="hud-area-sub"></div></div>
+    <div id="hud-veh"></div>
+    <div id="hud-road"></div>
+    <div id="hud-speed"><span id="hud-speed-val">0</span><small>km/h</small></div>
+    <div id="hud-sub"></div>
+    <div id="hud-prompt"></div>
+    <div id="hud-cross"><i></i><i></i><i></i><i></i></div>
+    <div id="hud-hit"></div>
+    <div id="hud-scope"></div>
+    <div id="hud-big"><div id="hud-big-title"></div><div id="hud-big-sub"></div></div>
+    <div id="hud-fps"></div>
+  </div>
+
+  <div id="mapwrap"><canvas id="bigmap"></canvas></div>
+
+  <!-- ================= Screens ================= -->
+  <div id="scr-loading" class="screen show">
+    <div class="logo"><span>AUTOBAHN</span><span>OUTLAWS</span></div>
+    <div class="flagbar"><i></i><i></i><i></i></div>
+    <div id="load-box"><div id="load-bar"></div></div>
+    <div id="load-text">Loading…</div>
+    <div class="tip" id="load-tip"></div>
+  </div>
+
+  <div id="scr-menu" class="screen">
+    <div class="menu-inner">
+      <div class="logo"><span>AUTOBAHN</span><span>OUTLAWS</span></div>
+      <div class="flagbar"><i></i><i></i><i></i></div>
+      <p class="tagline">Open-world crime across Germany · Kein Tempolimit</p>
+      <div class="btns">
+        <button data-act="continue" id="btn-continue">Continue</button>
+        <button data-act="new">New Game</button>
+        <button data-act="settings">Settings</button>
+        <button data-act="controls">Controls</button>
+        <button data-act="credits">Credits</button>
+        <button data-act="fullscreen" class="ghost">Fullscreen</button>
+      </div>
+      <p class="small" id="menu-note">Best with keyboard &amp; mouse or a gamepad. Click the game to capture the mouse.</p>
+    </div>
+  </div>
+
+  <div id="scr-pause" class="screen">
+    <div class="panel">
+      <h2>Pause</h2>
+      <div class="btns">
+        <button data-act="resume">Resume</button>
+        <button data-act="map">Map</button>
+        <button data-act="save">Save game</button>
+        <button data-act="settings">Settings</button>
+        <button data-act="controls">Controls</button>
+        <button data-act="fullscreen" class="ghost">Fullscreen</button>
+        <button data-act="quit" class="ghost">Save &amp; quit to menu</button>
+      </div>
+      <div id="pause-stats" class="stats"></div>
+    </div>
+  </div>
+
+  <div id="scr-settings" class="screen">
+    <div class="panel">
+      <h2>Settings</h2>
+      <div class="form">
+        <label>Graphics quality
+          <select id="set-quality"><option value="low">Low (fast)</option><option value="medium">Medium</option><option value="high">High (shadows, more trees)</option></select>
+        </label>
+        <p id="set-quality-note" class="small warn">Some changes (tree density, antialiasing) apply after reloading the game.</p>
+        <label>Draw distance <span id="lbl-draw"></span><input type="range" id="set-draw" min="500" max="2200" step="100"></label>
+        <label>Mouse sensitivity <span id="lbl-sens"></span><input type="range" id="set-sens" min="0.2" max="3" step="0.05"></label>
+        <label class="chk"><input type="checkbox" id="set-invert"> Invert mouse Y</label>
+        <label>Master volume <span id="lbl-master"></span><input type="range" id="set-master" min="0" max="1" step="0.05"></label>
+        <label>Radio / music <span id="lbl-music"></span><input type="range" id="set-music" min="0" max="1" step="0.05"></label>
+        <label>Effects <span id="lbl-sfx"></span><input type="range" id="set-sfx" min="0" max="1" step="0.05"></label>
+        <label class="chk"><input type="checkbox" id="set-shake"> Camera shake</label>
+        <label class="chk"><input type="checkbox" id="set-fps"> Show FPS</label>
+      </div>
+      <div class="btns"><button data-act="back">Back</button></div>
+    </div>
+  </div>
+
+  <div id="scr-controls" class="screen">
+    <div class="panel wide">
+      <h2>Controls</h2>
+      <div id="controls-list"></div>
+      <div class="btns"><button data-act="back">Back</button></div>
+    </div>
+  </div>
+
+  <div id="scr-credits" class="screen">
+    <div class="panel">
+      <h2>Credits</h2>
+      <p><b>Autobahn Outlaws</b> — a browser open-world game set in Germany.</p>
+      <p>All graphics, sounds and radio music are generated procedurally at runtime — no external assets.</p>
+      <p>Map data: hand-traced outline of Germany, its cities, rivers, lakes, uplands and Autobahn network (simplified and scaled down for play).</p>
+      <p>Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> (MIT licence).</p>
+      <p class="small">This is a work of fiction. All characters, companies and brands in the game are fictional. Any resemblance to real persons is coincidental. Do not drive like this in real life.</p>
+      <div class="btns"><button data-act="back">Back</button></div>
+    </div>
+  </div>
+
+  <div id="scr-shop" class="screen">
+    <div class="panel wide">
+      <h2 id="shop-title">Shop</h2>
+      <p id="shop-sub" class="small"></p>
+      <div class="shop-money">Cash: <b id="shop-money"></b></div>
+      <div id="shop-list"></div>
+      <div class="btns"><button data-act="closeshop">Leave shop</button></div>
+    </div>
+  </div>
+
+  <div id="fatal" class="screen"><div class="panel"><h2>Oops</h2><p id="fatal-msg"></p></div></div>
+
+  <noscript><div class="screen show"><div class="panel"><h2>JavaScript required</h2><p>Please enable JavaScript to play Autobahn Outlaws.</p></div></div></noscript>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
