@@ -81,6 +81,7 @@ export async function buildWorld(scene, quality, progress = () => {}) {
   progress(0.9, 'Drawing the map…');
   await tick();
   world.map = buildMapImage(world);
+  world.edges = { x0: GRID.X0 + 150, x1: GRID.X1 - 150, z0: GRID.Z0 + 150, z1: GRID.Z1 - 150 };
   world.nightMats = [mats.wallMat, mats.glassMat];
   return world;
 }

@@ -172,12 +172,16 @@ export class Vehicle {
       vF -= vF * (0.05 + (coast ? 0.25 : 0) + Math.abs(vF) * 0.0006) * dt;
       if (c.handbrake) vF -= vF * 1.6 * dt;
       if (coast && Math.abs(vF) < 0.4) vF *= 0.9;
-      const steerMax = d.steer / (1 + Math.abs(vF) / 20);
+      const steerMax = d.steer / (1 + Math.abs(vF) / 14);
       this.steerAngle = lerp(this.steerAngle, c.steer * steerMax, Math.min(1, dt * 7));
       const wet = G.sky && G.sky.weather > 0.5 ? 0.82 : 1;
       const grip = d.grip * (c.handbrake ? 0.22 : 1) * wet;
-      const yawT = (-vF * Math.tan(this.steerAngle)) / d.wheelbase;
-      this.angVel = lerp(this.angVel, yawT * (c.handbrake ? 1.4 : 1), Math.min(1, dt * 7 * Math.max(0.4, grip)));
+      // geometric yaw rate, capped by the lateral acceleration the tyres can take
+      const yawGeo = (-vF * Math.tan(this.steerAngle)) / d.wheelbase;
+      const latMax = (d.cls === 'bike' ? 24 : 21) * d.grip * wet + (c.handbrake ? 14 : 0);
+      const maxYaw = latMax / Math.max(Math.abs(vF), 4);
+      const yawT = clamp(yawGeo, -maxYaw, maxYaw);
+      this.angVel = lerp(this.angVel, yawT * (c.handbrake ? 1.35 : 1), Math.min(1, dt * 7 * Math.max(0.4, grip)));
       vR *= Math.exp(-dt * 10 * grip);
       vF -= 9.8 * Math.sin(this.pitch) * dt;
       // tyre smoke when drifting
@@ -285,6 +289,14 @@ export class Vehicle {
     const W = G.world;
     if (!W || (G.time - (this._bt || 0)) < 0.25) return;
     this._bt = G.time;
+    // hard edge of the playable map
+    const E = W.edges;
+    if (this.pos.x < E.x0 || this.pos.x > E.x1 || this.pos.z < E.z0 || this.pos.z > E.z1) {
+      this.pos.x = Math.min(E.x1, Math.max(E.x0, this.pos.x));
+      this.pos.z = Math.min(E.z1, Math.max(E.z0, this.pos.z));
+      this.vel.multiplyScalar(-0.3);
+      if (this.driver === 'player') G.hud.notify('You have reached the edge of the map.', 3);
+    }
     const bi = W.borderInfo(this.pos.x, this.pos.z);
     if (!bi.inside && bi.t === 'l' && bi.d > 2) {
       const dx = bi.x - this.pos.x, dz = bi.z - this.pos.z, l = Math.hypot(dx, dz) || 1;

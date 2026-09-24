@@ -10,7 +10,7 @@ const $ = (id) => document.getElementById(id);
 const CONTROLS = [
   ['W A S D', 'Move / drive'], ['Mouse', 'Look / aim'], ['Left click', 'Shoot / punch'], ['Right click', 'Aim (hold)'],
   ['Shift', 'Sprint · (heli: descend)'], ['Space', 'Jump · handbrake · (heli: climb)'], ['F', 'Enter / exit / steal vehicle'],
-  ['E', 'Interact · start mission · skip dialogue'], ['R', 'Reload'], ['1–8 / Wheel', 'Select weapon (0 = fists)'], ['H', 'Horn'],
+  ['E', 'Interact · start mission · skip dialogue'], ['R', 'Reload'], ['1–7 / Wheel', 'Select weapon (0 = fists)'], ['H', 'Horn'],
   ['Q', 'Change radio station'], ['C', 'Change vehicle camera'], ['N', 'Police siren (police vehicles)'], ['J', 'Taxi job (in a taxi)'],
   ['Ctrl / Z', 'Helicopter descend'], ['M', 'Map (click to set waypoint)'], ['Esc / P', 'Pause'],
 ];

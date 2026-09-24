@@ -296,7 +296,7 @@ export const STORY = [
     start: () => { const s = service('club', 'berlin'); return { x: s.x, y: s.y, z: s.z - 1 }; },
     steps: () => [
       S.talk([['svetlana', 'Der Graf\'s men parked three cars full of cash around Berlin.'], ['svetlana', 'Here — a Panzerfaust and grenades. Make it loud.']]),
-      S.action(() => { G.player.giveWeapon('rpg', 5); G.player.giveWeapon('grenade', 5); G.hud.notify('Received: Panzerfaust + Handgranaten (keys 7 / 8)', 4); }),
+      S.action(() => { G.player.giveWeapon('rpg', 5); G.player.giveWeapon('grenade', 5); G.hud.notify('Received: Panzerfaust + Handgranaten (keys 6 / 7)', 4); }),
       S.kill('Destroy Der Graf\'s cars', (m) => {
         const c = CITY_BY_ID.berlin;
         const out = [];

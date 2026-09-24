@@ -228,6 +228,9 @@ export class Player {
   keepInWorld(p) {
     if ((G.time - (this._bt || 0)) < 0.2) return;
     this._bt = G.time;
+    const E = G.world.edges;
+    p.x = Math.min(E.x1, Math.max(E.x0, p.x));
+    p.z = Math.min(E.z1, Math.max(E.z0, p.z));
     const bi = G.world.borderInfo(p.x, p.z);
     if (!bi.inside && bi.t === 'l' && bi.d > 1) {
       const dx = bi.x - p.x, dz = bi.z - p.z, l = Math.hypot(dx, dz) || 1;

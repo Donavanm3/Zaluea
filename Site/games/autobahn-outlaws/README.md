@@ -48,7 +48,7 @@ generated procedurally at load time. There are no external asset files, so the g
 | Enter, exit, steal vehicle | F | Y |
 | Interact, start mission, skip dialogue | E | X |
 | Reload | R | B |
-| Select weapon | 1–8, mouse wheel (0 = fists) | LB / RB |
+| Select weapon | 1–7, mouse wheel (0 = fists) | LB / RB |
 | Horn / radio / camera | H / Q / C | L3 / D-pad up / R3 |
 | Police siren (police vehicles) | N | D-pad left |
 | Taxi job | J | D-pad down |

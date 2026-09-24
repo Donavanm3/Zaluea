@@ -148,6 +148,12 @@ async function boot() {
   G.applyGraphics();
 
   G.startGame = startGame;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (G.state === 'play') G.ui.pause();
+      if (G.audio.ctx) G.audio.ctx.suspend();
+    } else if (G.audio.ctx) G.audio.ctx.resume();
+  });
   $('btn-continue').style.display = G.save.has() ? '' : 'none';
   if ('ontouchstart' in window && !matchMedia('(pointer: fine)').matches) {
     $('menu-note').textContent = 'Touch controls: left side = move, right side = look, buttons for actions. Keyboard, mouse and gamepads work too.';
