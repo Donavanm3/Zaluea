@@ -1,10 +1,10 @@
 # Autobahn Outlaws
 
-An open-world crime action game set across **all of Germany**, playable in any modern desktop browser.
+An open-world crime action game set across **all of Germany**, playable in any modern browser (keyboard & mouse, gamepad or touch).
 Steal cars, race down the Autobahn with no speed limit, fly helicopters over the Alps, take boats
 through Hamburg harbour and try to survive a five-star police pursuit from Kiel to the Zugspitze.
 
-Everything — the map, buildings, vehicles, people, sound effects and the three radio stations — is
+Everything — the map, buildings, vehicles, people, sound effects and the four radio stations — is
 generated procedurally at load time. There are no external asset files, so the game is small
 (about 1 MB including three.js) and works offline once loaded.
 
