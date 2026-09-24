@@ -11,7 +11,7 @@ const CONTROLS = [
   ['W A S D', 'Move / drive'], ['Mouse', 'Look / aim'], ['Left click', 'Shoot / punch'], ['Right click', 'Aim (hold)'],
   ['Shift', 'Sprint · (heli: descend)'], ['Space', 'Jump · handbrake · (heli: climb)'], ['F', 'Enter / exit / steal vehicle'],
   ['E', 'Interact · start mission · skip dialogue'], ['R', 'Reload'], ['1–7 / Wheel', 'Select weapon (0 = fists)'], ['H', 'Horn'],
-  ['Q', 'Change radio station'], ['C', 'Change vehicle camera'], ['N', 'Police siren (police vehicles)'], ['J', 'Taxi job (in a taxi)'],
+  ['Q', 'Change radio station'], ['C', 'Change vehicle camera'], ['N', 'Police siren (police vehicles)'], ['J', 'Taxi job (taxi) · Vigilante (police car)'],
   ['Ctrl / Z', 'Helicopter descend'], ['M', 'Map (click to set waypoint)'], ['Esc / P', 'Pause'],
 ];
 
@@ -93,6 +93,7 @@ export class UI {
       <div><span>Money</span><b>${formatMoney(G.money)}</b></div>
       <div><span>Story missions</span><b>${G.missions.progress} / 10</b></div>
       <div><span>Garden gnomes</span><b>${G.pickups.collected ? G.pickups.collected.size : 0} / 30</b></div>
+      <div><span>Stunt jumps</span><b>${G.stunts ? G.stunts.done.size : 0} / ${G.stunts ? G.stunts.ramps.length : 0}</b></div>
       <div><span>Kills</span><b>${s.kills}</b></div>
       <div><span>Vehicles stolen</span><b>${s.carsStolen}</b></div>
       <div><span>Distance driven</span><b>${(s.distance * 0.1545).toFixed(1)} km</b></div>

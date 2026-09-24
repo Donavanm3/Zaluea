@@ -28,7 +28,8 @@ generated procedurally at load time. There are no external asset files, so the g
 - **Police & wanted system**: 1–5 stars, patrol cars, SEK vans and helicopters, cops who try to arrest you at low
   levels and shoot at higher ones, line-of-sight based evasion, BUSTED and WASTED.
 - **Story**: 10 missions across Hamburg, Bremen, Hannover, Berlin, Frankfurt, München and Neuschwanstein.
-- **Side activities**: taxi fares, four Autobahn races with best times, 30 hidden garden gnomes (Gartenzwerge).
+- **Side activities**: taxi fares, vigilante missions in police cars, four Autobahn races with best times,
+  stunt-jump ramps beside the Autobahn and 30 hidden garden gnomes (Gartenzwerge).
 - **Shops & services**: Waffenladen (gun shop), Lackiererei (respray to lose the police), Krankenhaus, Tankstelle
   (Currywurst & repairs), safehouses for saving.
 - **Radio**: procedural Berlin techno, Bavarian brass band, classical and synthwave stations.
@@ -51,7 +52,7 @@ generated procedurally at load time. There are no external asset files, so the g
 | Select weapon | 1–7, mouse wheel (0 = fists) | LB / RB |
 | Horn / radio / camera | H / Q / C | L3 / D-pad up / R3 |
 | Police siren (police vehicles) | N | D-pad left |
-| Taxi job | J | D-pad down |
+| Taxi job (taxi) / vigilante (police car) | J | D-pad down |
 | Map | M | Back |
 | Pause | Esc or P | Start |
 
@@ -84,7 +85,9 @@ and open the printed address. Inside the Zaluea site it is listed on the Games p
 - Saves and settings are stored in the browser's `localStorage`.
 - Source layout: `src/geo.js` (Germany data), `terrain.js`, `roads.js`, `city.js`, `landmarks.js`, `nature.js`
   (world), `vehicle.js`, `vehicles.js`, `traffic.js`, `character.js`, `peds.js`, `police.js`, `weapons.js`,
-  `player.js` (gameplay), `missions.js`, `hud.js`, `ui.js`, `save.js`, `audio.js`, `sky.js`, `effects.js`, `main.js`.
+  `player.js` (gameplay), `missions.js`, `stunts.js`, `pickups.js`, `hud.js`, `ui.js`, `touch.js`, `save.js`,
+  `audio.js`, `sky.js`, `effects.js`, `main.js`.
+- Touch devices get an on-screen joystick, drag-to-look and action buttons automatically.
 
 ## Legal
 

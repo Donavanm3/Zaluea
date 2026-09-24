@@ -346,6 +346,7 @@ export class Player {
     G.hud.vehicleName(v.def.name, v.def.cls !== 'bike' && G.audio.stations[G.audio.station].name);
     if (v.def.cls === 'heli') G.hud.notify('Helicopter: W/S forward/back · A/D turn · Space climb · Shift/Ctrl descend.', 6);
     if (v.def.taxi) G.hud.notify('Taxi! Press J to start picking up fares.', 5);
+    if (v.isPolice && v.cls !== 'heli') G.hud.notify('Police car! Press J for vigilante missions, N for the siren.', 5);
   }
 
   exitVehicle() {
@@ -449,6 +450,7 @@ export class Player {
     if (I.pressed('camera')) this.cam.mode = (this.cam.mode + 1) % 3;
     if (I.pressed('enter') && this.enterCooldown <= 0) { this.exitVehicle(); return; }
     if (I.pressed('job') && v.def.taxi && G.missions) G.missions.toggleTaxi();
+    else if (I.pressed('job') && v.isPolice && v.cls !== 'heli' && G.missions) G.missions.toggleVigilante();
 
     // drive-by
     const w = WEAPONS[this.weapon];

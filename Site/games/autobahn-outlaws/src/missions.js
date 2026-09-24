@@ -410,6 +410,7 @@ export class Missions {
   get gpsTarget() {
     if (this.active) return this.active.gpsTarget || null;
     if (this.taxi) return this.taxiTarget || null;
+    if (this.vigil && this.vigil.target && !this.vigil.target.dead) return this.vigil.target.pos;
     return null;
   }
 
@@ -464,6 +465,7 @@ export class Missions {
       }
     }
     if (this.taxi && this.taxi.target) out.push({ x: this.taxi.target.x, z: this.taxi.target.z, color: '#f2c200', size: 6, always: true });
+    if (this.vigil && this.vigil.target && !this.vigil.target.dead) out.push({ x: this.vigil.target.pos.x, z: this.vigil.target.pos.z, color: '#ff3030', size: 6, always: true });
     return out;
   }
 
@@ -484,6 +486,7 @@ export class Missions {
   // --------- mission lifecycle ---------
   start(def, isRace = false) {
     if (this.taxi) this.toggleTaxi();
+    if (this.vigil) this.toggleVigilante();
     const m = {
       def, isRace, stepIdx: -1, steps: def.steps(), data: {}, ents: [], vehs: [], blipList: [], fails: [], timer: null, gpsTarget: null,
       spawnVehicle: (type, x, y, z, h, color) => {
@@ -595,6 +598,69 @@ export class Missions {
     this.cooldown = 3;
   }
 
+  // --------- vigilante side job (police vehicles) ---------
+  toggleVigilante() {
+    if (this.vigil) {
+      const V = this.vigil;
+      if (V.target) V.target.persist = false;
+      this.vigil = null;
+      G.flags.noWanted = false;
+      G.hud.objective('');
+      G.hud.timer(null);
+      G.hud.notify(`Vigilante ended. Reached level ${V.level}, earned €${V.earned}.`, 4);
+      return;
+    }
+    if (this.active || this.taxi) return;
+    this.vigil = { level: 1, earned: 0, target: null, time: 0, away: 0 };
+    G.flags.noWanted = true;
+    G.police.clear();
+    G.hud.notify('Vigilante: hunt down fleeing suspects. Drive-by with pistol/SMG or ram them!', 5);
+    this.newCriminal();
+  }
+
+  newCriminal() {
+    const V = this.vigil;
+    const car = G.traffic.spawnNear(G.player.pos, 120, 240);
+    if (!car) { V.target = null; return; }
+    car.persist = true;
+    car.criminal = true;
+    if (car.ai) { car.ai.panic = 9999; car.ai.base *= 1.25; }
+    car.hp = car.def.hp * (0.6 + V.level * 0.1);
+    V.target = car;
+    V.time = 80 + V.level * 8;
+    G.hud.notify(`Suspects fleeing in a ${car.def.name}!`, 3);
+  }
+
+  updateVigil(dt) {
+    const V = this.vigil;
+    const pv = G.player.vehicle;
+    if (!pv || !pv.isPolice) {
+      V.away += dt;
+      G.hud.objective('Vigilante: get back in a police vehicle!');
+      if (V.away > 12) this.toggleVigilante();
+      return;
+    }
+    V.away = 0;
+    if (!V.target) { this.newCriminal(); return; }
+    const t = V.target;
+    if (t.dead) {
+      const pay = 150 * V.level;
+      G.money += pay; V.earned += pay;
+      G.hud.moneyPop(pay);
+      G.audio.ui('money');
+      G.hud.notify(`Suspects neutralised! +€${pay}`, 3);
+      t.persist = false;
+      V.level++;
+      this.newCriminal();
+      return;
+    }
+    if (!G.vehicles.list.includes(t)) { this.newCriminal(); return; }
+    V.time -= dt;
+    G.hud.timer(Math.max(0, V.time));
+    G.hud.objective(`Vigilante level <b>${V.level}</b>: stop the suspects' <b>${t.def.name}</b> (red).`);
+    if (V.time <= 0) { G.hud.notify('The suspects got away.', 3); this.toggleVigilante(); }
+  }
+
   // --------- taxi side job ---------
   toggleTaxi() {
     if (this.taxi) {
@@ -698,6 +764,7 @@ export class Missions {
     this.cooldown -= dt;
     const P = G.player;
     if (this.taxi && !this.active) this.updateTaxi(dt);
+    if (this.vigil && !this.active) this.updateVigil(dt);
     if (!this.active) {
       if (P.dead || P.busted) return;
       let prompt = null;

@@ -172,18 +172,36 @@ export class Physics {
           if (o._s === s || o.dead || o.k === 2 || (opts.ignore && o === opts.ignore)) continue;
           o._s = s;
           if (o.k === 0) {
-            // slab test
+            // slab test (unrolled, allocation free)
             let t0 = 0, t1 = best, nx = 0, ny = 0, nz = 0;
             let ok = true;
-            const axes = [[ox, dx, o.minX, o.maxX, 0], [oy, dy, o.minY, o.maxY, 1], [oz, dz, o.minZ, o.maxZ, 2]];
-            for (const [oo, dd, mn, mx, ax] of axes) {
-              if (Math.abs(dd) < 1e-9) { if (oo < mn || oo > mx) { ok = false; break; } continue; }
-              let ta = (mn - oo) / dd, tb = (mx - oo) / dd;
-              let sgn = -1;
-              if (ta > tb) { const tmp = ta; ta = tb; tb = tmp; sgn = 1; }
-              if (ta > t0) { t0 = ta; nx = ax === 0 ? sgn : 0; ny = ax === 1 ? sgn : 0; nz = ax === 2 ? sgn : 0; }
+            if (Math.abs(dx) < 1e-9) { if (ox < o.minX || ox > o.maxX) ok = false; }
+            else {
+              let ta = (o.minX - ox) / dx, tb = (o.maxX - ox) / dx, sg = -1;
+              if (ta > tb) { const q = ta; ta = tb; tb = q; sg = 1; }
+              if (ta > t0) { t0 = ta; nx = sg; ny = 0; nz = 0; }
               if (tb < t1) t1 = tb;
-              if (t0 > t1) { ok = false; break; }
+              if (t0 > t1) ok = false;
+            }
+            if (ok) {
+              if (Math.abs(dy) < 1e-9) { if (oy < o.minY || oy > o.maxY) ok = false; }
+              else {
+                let ta = (o.minY - oy) / dy, tb = (o.maxY - oy) / dy, sg = -1;
+                if (ta > tb) { const q = ta; ta = tb; tb = q; sg = 1; }
+                if (ta > t0) { t0 = ta; nx = 0; ny = sg; nz = 0; }
+                if (tb < t1) t1 = tb;
+                if (t0 > t1) ok = false;
+              }
+            }
+            if (ok) {
+              if (Math.abs(dz) < 1e-9) { if (oz < o.minZ || oz > o.maxZ) ok = false; }
+              else {
+                let ta = (o.minZ - oz) / dz, tb = (o.maxZ - oz) / dz, sg = -1;
+                if (ta > tb) { const q = ta; ta = tb; tb = q; sg = 1; }
+                if (ta > t0) { t0 = ta; nx = 0; ny = 0; nz = sg; }
+                if (tb < t1) t1 = tb;
+                if (t0 > t1) ok = false;
+              }
             }
             if (ok && t0 < best && t0 > 0) { best = t0; bobj = o; bnx = nx; bny = ny; bnz = nz; }
           } else {

@@ -21,6 +21,7 @@ import { SaveSystem, loadSettings } from './save.js';
 import { updateRotors } from './nature.js';
 import { lerp } from './util.js';
 import { TouchControls } from './touch.js';
+import { Stunts } from './stunts.js';
 
 const TIPS = [
   'There is no general speed limit on the Autobahn — but the police still care about the rest.',
@@ -70,6 +71,11 @@ async function boot() {
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    if (G.state === 'play') G.ui.pause();
+    fatal('The graphics context was lost (the GPU was reset or ran out of memory). Your progress is auto-saved at safehouses and after missions — <a href="" onclick="location.reload()">reload the game</a>, and try a lower graphics quality in Settings.');
+  });
   const scene = new THREE.Scene();
   G.scene = scene;
   const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.3, 5000);
@@ -127,6 +133,7 @@ async function boot() {
   G.save = new SaveSystem();
   G.ui = new UI();
   G.vehicles.initSpots();
+  G.stunts = new Stunts();
 
   // Headlight for the player's vehicle (always present so shaders never recompile)
   const head = new THREE.SpotLight(0xfff2d8, 0, 70, 0.55, 0.6, 1.2);
@@ -189,12 +196,14 @@ function startGame(save) {
     G.missions.init(save.progress || 0, save.bestTimes);
     G.pickups.initGnomes(save.gnomes || []);
     G.stats.gnomes = G.pickups.collected.size;
+    G.stunts.init(save.stunts || []);
     if (save.weapon && P.inv[save.weapon]) P.switchTo(save.weapon);
     G.hud.notify('Welcome back to Germany.', 3);
   } else {
     G.clock = 9.0;
     G.missions.init(0, {});
     G.pickups.initGnomes([]);
+    G.stunts.init([]);
     G.hud.notify('Welcome to Autobahn Outlaws! Walk into the yellow marker and press E to start your first mission.', 7);
     setTimeout(() => G.hud.notify('Controls: WASD move · Mouse look · F steal/enter cars · M map · Esc pause.', 6), 600);
   }
@@ -272,6 +281,7 @@ function stepGame(dt) {
   G.police.update(dt);
   G.weapons.update(dt);
   G.pickups.update(dt);
+  G.stunts.update(dt);
   G.player.updateCamera(dt);
   G.missions.update(dt);
   G.ui.updateInteractions();

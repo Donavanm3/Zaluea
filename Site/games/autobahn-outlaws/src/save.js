@@ -47,6 +47,7 @@ export class SaveSystem {
       progress: G.missions.progress,
       bestTimes: G.missions.bestTimes,
       gnomes: [...(G.pickups.collected || [])],
+      stunts: G.stunts ? [...G.stunts.done] : [],
       stats: G.stats,
       clock: G.clock,
       pos: { x: p.x, y: p.y + 0.5, z: p.z },
