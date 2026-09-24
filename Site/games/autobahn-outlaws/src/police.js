@@ -146,7 +146,7 @@ class PoliceHeliAI {
       const tp = G.player.pos;
       const dir = new THREE.Vector3(tp.x - from.x, tp.y + 1 - from.y, tp.z - from.z).normalize();
       if (G.physics.lineOfSight(from.x, from.y, from.z, tp.x, tp.y + 1.2, tp.z)) {
-        G.weapons.fire(null, 'rifle', from, dir, { extraSpread: 0.05, dmgMul: 0.35, vehicle: v });
+        G.weapons.fire(null, 'rifle', from, dir, { extraSpread: 0.06, dmgMul: 0.28, vehicle: v });
       }
     }
     G.audio.setHeli(true, 1, v.pos);

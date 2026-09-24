@@ -131,3 +131,58 @@ kbd { display: inline-block; min-width: 96px; text-align: center; background: #2
 #scr-pause .panel h2 { grid-column: 1 / -1; }
 #scr-pause .stats { margin-top: 12px; grid-template-columns: 1fr; align-content: start; }
 @media (max-width: 720px) { #scr-pause .panel { grid-template-columns: 1fr; } }
+
+#map-close { position: absolute; top: 16px; right: 16px; min-width: 0; z-index: 2; }
+#touch { position: fixed; inset: 0; pointer-events: none; z-index: 12; }
+#t-stick { position: absolute; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); background: rgba(0,0,0,0.15); display: none; }
+#t-knob { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,0.45); }
+.tbtn { position: absolute; pointer-events: auto; min-width: 0; width: 58px; height: 58px; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,0.4); background: rgba(0,0,0,0.35); color: #fff; font-size: 22px; text-align: center; touch-action: none; }
+.tbtn:hover:not(:disabled) { transform: none; background: rgba(0,0,0,0.35); color: #fff; }
+.tbtn.on, .tbtn.lock { background: rgba(242,194,0,0.6) !important; }
+.tbtn.big { width: 78px; height: 78px; font-size: 28px; }
+.tbtn[data-t=fire] { right: 24px; bottom: 120px; }
+.tbtn[data-t=aim] { right: 118px; bottom: 150px; }
+.tbtn[data-t=jump] { right: 30px; bottom: 214px; }
+.tbtn[data-t=enter] { right: 110px; bottom: 228px; }
+.tbtn[data-t=act] { right: 186px; bottom: 190px; }
+.tbtn[data-t=wpn] { right: 190px; bottom: 116px; }
+.tbtn[data-t=sprint] { right: 118px; bottom: 76px; }
+.tbtn[data-t=map] { right: 230px; top: 14px; width: 46px; height: 46px; font-size: 18px; }
+.tbtn[data-t=pause] { right: 284px; top: 14px; width: 46px; height: 46px; font-size: 16px; }
+body.touch #hud-speed { bottom: 20px; right: 50%; transform: translateX(50%); }
+body.touch #hud-area { right: 50%; transform: translateX(50%); bottom: auto; top: 64px; text-align: center; }
+body.touch #hud-area-name { font-size: 30px; }
+body.touch #hud-veh { right: 50%; transform: translateX(50%); bottom: auto; top: 110px; text-align: center; }
+body.touch #hud-objective { bottom: 150px; max-width: 46vw; font-size: 15px; }
+body.touch #hud-sub { bottom: 100px; width: 50vw; font-size: 15px; }
+body.touch #hud-notify { max-width: 38vw; font-size: 13px; padding: 8px 10px; }
+.screen { overflow-y: auto; }
+body.touch #minimap { width: 150px; height: 150px; }
+body.touch #hud-minimapwrap { width: 150px; }
+@media (max-height: 540px) {
+  .logo span { font-size: 46px; }
+  .flagbar { margin: 8px 0 6px; }
+  .tagline { margin: 2px 0 10px; font-size: 14px; }
+  .btns { gap: 6px; }
+  button { padding: 8px 16px; font-size: 15px; }
+  .panel { padding: 16px 20px; }
+  .panel h2 { font-size: 28px; }
+  #hud-money { font-size: 28px; }
+  #hud-stars { font-size: 20px; margin-top: 4px; }
+  #hud-clock { font-size: 14px; }
+  #hud-weaponbox { padding: 3px 8px; }
+  #hud-ammo { font-size: 15px; }
+  .tbtn { width: 48px; height: 48px; font-size: 18px; }
+  .tbtn.big { width: 64px; height: 64px; font-size: 24px; }
+  .tbtn[data-t=fire] { right: 18px; bottom: 64px; }
+  .tbtn[data-t=aim] { right: 94px; bottom: 92px; }
+  .tbtn[data-t=jump] { right: 20px; bottom: 140px; }
+  .tbtn[data-t=enter] { right: 82px; bottom: 152px; }
+  .tbtn[data-t=act] { right: 150px; bottom: 124px; }
+  .tbtn[data-t=wpn] { right: 152px; bottom: 60px; }
+  .tbtn[data-t=sprint] { right: 92px; bottom: 22px; }
+  .tbtn[data-t=map] { right: 190px; top: 8px; width: 40px; height: 40px; }
+  .tbtn[data-t=pause] { right: 236px; top: 8px; width: 40px; height: 40px; }
+  body.touch #minimap { width: 120px; height: 120px; }
+  body.touch #hud-minimapwrap { width: 120px; left: 10px; bottom: 10px; }
+}

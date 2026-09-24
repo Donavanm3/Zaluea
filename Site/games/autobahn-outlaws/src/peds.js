@@ -373,7 +373,7 @@ export class Peds {
         _dir.subVectors(_t, _m).normalize();
         const tv = t === G.player.char && G.player.vehicle ? Math.hypot(G.player.vehicle.vel.x, G.player.vehicle.vel.z) : Math.hypot(t.vel.x, t.vel.z);
         const err = (1 - ai.accuracy) * 0.09 + d * 0.0012 + tv * 0.004;
-        G.weapons.fire(c, c.weapon, _m, _dir, { extraSpread: err, dmgMul: ai.role === 'cop' ? 0.42 : 0.5 });
+        G.weapons.fire(c, c.weapon, _m, _dir, { extraSpread: err, dmgMul: ai.role === 'cop' ? 0.34 : 0.45 });
         ai.burst++;
         const burstMax = w.auto ? 4 : 2;
         if (ai.burst >= burstMax) { ai.burst = 0; ai.fireT = rand(0.9, 1.8); }

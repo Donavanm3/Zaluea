@@ -66,6 +66,7 @@ export class UI {
         break;
       case 'buy': this.buy(el.dataset.item, el.dataset.kind); break;
       case 'closeshop': this.closeShop(); break;
+      case 'closemap': G.hud.openMap(false); G.state = 'play'; G.input.lock(); break;
     }
   }
 

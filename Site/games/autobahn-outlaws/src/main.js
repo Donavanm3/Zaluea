@@ -20,6 +20,7 @@ import { UI } from './ui.js';
 import { SaveSystem, loadSettings } from './save.js';
 import { updateRotors } from './nature.js';
 import { lerp } from './util.js';
+import { TouchControls } from './touch.js';
 
 const TIPS = [
   'There is no general speed limit on the Autobahn — but the police still care about the rest.',
@@ -90,6 +91,7 @@ async function boot() {
   resize();
 
   G.input = new Input(canvas);
+  G.touch = new TouchControls(G.input);
   G.audio = new AudioSys();
   G.audio.vol = { master: G.settings.master, sfx: G.settings.sfx, music: G.settings.music };
   G.sky = new Sky(scene, q);
@@ -139,7 +141,7 @@ async function boot() {
   G.applyGraphics = () => {
     const far = G.settings.drawDistance;
     G.sky.farBase = far;
-    camera.far = far + 2500;
+    camera.far = far + 400;
     camera.updateProjectionMatrix();
     G.sky.camFar = camera.far;
   };
@@ -148,7 +150,7 @@ async function boot() {
   G.startGame = startGame;
   $('btn-continue').style.display = G.save.has() ? '' : 'none';
   if ('ontouchstart' in window && !matchMedia('(pointer: fine)').matches) {
-    $('menu-note').textContent = 'This game needs a keyboard & mouse or a gamepad. Touch-only devices are not supported yet.';
+    $('menu-note').textContent = 'Touch controls: left side = move, right side = look, buttons for actions. Keyboard, mouse and gamepads work too.';
   }
   setProgress(1, 'Ready!');
   G.state = 'menu';
@@ -192,6 +194,19 @@ function startGame(save) {
   }
   // ground snap
   c.pos.y = G.physics.groundAt(c.pos.x, c.pos.z, c.pos.y + 2);
+  // guarantee a car close to the start
+  {
+    let best = null, bd = 70;
+    for (const s of G.vehicles.spots) {
+      if (s.kind !== 'parked' || s.veh) continue;
+      const d = Math.hypot(s.x - c.pos.x, s.z - c.pos.z);
+      if (d < bd && d > 6) { bd = d; best = s; }
+    }
+    if (best) {
+      const v = G.vehicles.spawn(save ? 'pendler' : 'kombi', best.x, best.y, best.z, best.heading);
+      v.spot = best; v.parked = true; v.ctrl.handbrake = true; best.veh = v;
+    }
+  }
   P.cam.yaw = c.heading;
   G.state = 'play';
   G.input.lock();
@@ -298,8 +313,13 @@ function commonUpdate(dt) {
     }
     const tf = far * 0.75;
     for (const t of G.world.treeChunks) t.visible = Math.hypot(t.userData.cx - cam.position.x, t.userData.cz - cam.position.z) < tf + 360;
+    for (const m of G.world.terrain.mesh.children) {
+      const bs = m.geometry.boundingSphere;
+      m.visible = Math.hypot(bs.center.x - cam.position.x, bs.center.z - cam.position.z) < far + bs.radius + 150;
+    }
   }
   updateRotors(G.world, dt);
+  if (G.touch) G.touch.update();
   G.fx.update(dt);
   if (G.audio.ctx) {
     G.audio.setListener(cam.position.x, cam.position.y, cam.position.z, G.player ? G.player.cam.yaw : 0);
