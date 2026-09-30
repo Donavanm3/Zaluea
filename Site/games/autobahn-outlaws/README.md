@@ -58,6 +58,16 @@ generated procedurally at load time. There are no external asset files, so the g
 
 ## Running locally
 
+**Quickest (macOS, Windows, Linux):** install Node.js 18+ from nodejs.org, then in the repository root run
+
+```sh
+npm run game
+```
+
+and open <http://localhost:3000> in Safari or Chrome. No `npm install` is needed. Use another port with
+`PORT=8080 npm run game`.
+
+
 The game uses native ES modules, so it has to be served over HTTP (opening `index.html` straight from disk will
 not work in most browsers). From this folder run any static web server, for example:
 

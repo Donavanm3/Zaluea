@@ -5,6 +5,7 @@
   },
   "scripts": {
     "start": "node index.js",
-    "package:game": "sh tools/package-game.sh"
+    "package:game": "sh tools/package-game.sh",
+    "game": "node tools/serve-game.mjs"
   }
 }
