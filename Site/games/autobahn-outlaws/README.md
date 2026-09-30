@@ -27,11 +27,17 @@ generated procedurally at load time. There are no external asset files, so the g
   follows lanes, turns at junctions, brakes and honks; day/night cycle with lit windows and street lamps; rain.
 - **Police & wanted system**: 1–5 stars, patrol cars, SEK vans and helicopters, cops who try to arrest you at low
   levels and shoot at higher ones, line-of-sight based evasion, BUSTED and WASTED.
-- **Story**: 10 missions across Hamburg, Bremen, Hannover, Berlin, Frankfurt, München and Neuschwanstein.
-- **Side activities**: taxi fares, vigilante missions in police cars, four Autobahn races with best times,
+- **Story**: 10 missions across Hamburg, Bremen, Hannover, Berlin, Frankfurt, München and Neuschwanstein. The
+  objective card and a yellow GPS route always point to the next thing to do.
+- **Side jobs & events**: car export contracts (steal a car from the export list and deliver it to a dock),
+  cash-truck robberies, taxi fares, vigilante missions in police cars, four Autobahn races with best times,
   stunt-jump ramps beside the Autobahn and 30 hidden garden gnomes (Gartenzwerge).
-- **Shops & services**: Waffenladen (gun shop), Lackiererei (respray to lose the police), Krankenhaus, Tankstelle
-  (Currywurst & repairs), safehouses for saving.
+- **Driving bonuses**: cash for near misses, drifts, big air and flat-out Autobahn runs, with a combo multiplier.
+- **Shops & services**: Waffenladen (gun shop), Autohaus (buy cars and a helicopter), Lackiererei (respray to lose
+  the police), Krankenhaus, Tankstelle (Currywurst & repairs), safehouses for saving.
+- **Modern look**: physically based materials, sky reflections on glass towers, cars and water, soft sun shadows,
+  procedural clouds, bloom, filmic tone mapping, 4× MSAA, street lamps that light the road at night, and a clean
+  glass-style HUD with a gauge speedometer, on-screen waypoint and hit/damage indicators.
 - **Radio**: procedural Berlin techno, Bavarian brass band, classical and synthwave stations.
 - Minimap with GPS routing, full-screen map with waypoints, save/load, settings (quality, draw distance,
   sensitivity, audio), gamepad support.
@@ -106,13 +112,15 @@ Mac's Python 3, and shows an alert if neither is available.
 
 - Rendering: [three.js](https://threejs.org) r186 (MIT licence, see `lib/THREE_LICENSE.txt`), bundled locally in
   `lib/three.module.min.js`.
-- World generation takes one to three seconds on a desktop PC. Graphics quality defaults to *Medium*; *High* adds
-  sun shadows on trees and a higher resolution, *Low* disables shadows and antialiasing for older laptops.
+- World generation takes one to three seconds on a desktop PC. Graphics quality defaults to *Medium* (HDR pipeline
+  with bloom and MSAA, soft shadows, street-lamp lights); *High* adds tree shadows, sharper shadows and a higher
+  resolution; *Low* renders straight to the screen without shadows or antialiasing for older laptops.
 - Saves and settings are stored in the browser's `localStorage`.
 - Source layout: `src/geo.js` (Germany data), `terrain.js`, `roads.js`, `city.js`, `landmarks.js`, `nature.js`
   (world), `vehicle.js`, `vehicles.js`, `traffic.js`, `character.js`, `peds.js`, `police.js`, `weapons.js`,
-  `player.js` (gameplay), `missions.js`, `stunts.js`, `pickups.js`, `hud.js`, `ui.js`, `touch.js`, `save.js`,
-  `audio.js`, `sky.js`, `effects.js`, `main.js`.
+  `player.js` (gameplay), `missions.js`, `events.js` (side jobs, driving bonuses), `stunts.js`, `pickups.js`,
+  `hud.js`, `ui.js`, `touch.js`, `save.js`, `audio.js`, `sky.js` (sky, clouds, sun, environment map),
+  `render.js` (HDR post-processing), `lamps.js` (street-lamp lights), `effects.js`, `main.js`.
 - Touch devices get an on-screen joystick, drag-to-look and action buttons automatically.
 
 ## Legal

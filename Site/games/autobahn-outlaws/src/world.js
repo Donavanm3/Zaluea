@@ -6,6 +6,7 @@ import { Physics } from './physics.js';
 import { buildCity, sharedCityMaterials } from './city.js';
 import { buildNature } from './nature.js';
 import { CITIES, CITY_BY_ID, POIS, ZUGSPITZE, insideGermany, BORDER, borderInfo } from './geo.js';
+import { waterNormalTexture } from './textures.js';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -83,13 +84,28 @@ export async function buildWorld(scene, quality, progress = () => {}) {
   world.map = buildMapImage(world);
   world.edges = { x0: GRID.X0 + 150, x1: GRID.X1 - 150, z0: GRID.Z0 + 150, z1: GRID.Z1 - 150 };
   world.nightMats = [mats.wallMat, mats.glassMat];
+  world.wetMats = [...roads.wetMats];
   return world;
 }
 
+// Reflective water with two scrolling ripple layers.
+export const waterTime = { value: 0 };
 function makeWater() {
-  const geo = new THREE.PlaneGeometry(GRID.X1 - GRID.X0 + 8000, GRID.Z1 - GRID.Z0 + 8000, 1, 1);
+  const W = GRID.X1 - GRID.X0 + 8000, H = GRID.Z1 - GRID.Z0 + 8000;
+  const geo = new THREE.PlaneGeometry(W, H, 1, 1);
   geo.rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshPhongMaterial({ color: 0x2f6f96, specular: 0x88aacc, shininess: 60, transparent: true, opacity: 0.88 });
+  const nm = waterNormalTexture();
+  nm.repeat.set(W / 45, H / 45);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x0f3a52, roughness: 0.07, metalness: 0, transparent: true, opacity: 0.9,
+    normalMap: nm, normalScale: new THREE.Vector2(0.28, 0.28), envMapIntensity: 1.3,
+  });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.wTime = waterTime;
+    sh.fragmentShader = 'uniform float wTime;\n' + sh.fragmentShader.replace('#include <normal_fragment_maps>', THREE.ShaderChunk.normal_fragment_maps.replace(
+      'vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;',
+      'vec3 mapN = normalize(texture2D( normalMap, vNormalMapUv + vec2(wTime * 0.013, wTime * 0.005) ).xyz * 2.0 - 1.0 + texture2D( normalMap, vNormalMapUv * 1.83 + vec2(-wTime * 0.007, wTime * 0.016) ).xyz * 2.0 - 1.0);'));
+  };
   const m = new THREE.Mesh(geo, mat);
   m.position.set((GRID.X0 + GRID.X1) / 2, -0.05, (GRID.Z0 + GRID.Z1) / 2);
   m.receiveShadow = true;

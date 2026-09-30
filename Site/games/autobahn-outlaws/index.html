@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="description" content="Autobahn Outlaws — an open-world crime action game across all of Germany. Drive the Autobahn, steal cars, fly helicopters and take on the police from Hamburg to the Alps. Runs in your browser.">
-  <meta name="theme-color" content="#111111">
+  <meta name="theme-color" content="#0b0d12">
   <meta property="og:title" content="Autobahn Outlaws">
   <meta property="og:description" content="Open-world crime action across Germany. No speed limit.">
   <title>Autobahn Outlaws</title>
@@ -18,6 +18,11 @@
   <!-- ================= HUD ================= -->
   <div id="hud" class="hidden">
     <div id="hud-dmg"></div>
+    <div id="hud-dirdmg"></div>
+    <div id="hud-left">
+      <div id="hud-objective"><div class="obj-lbl" id="hud-obj-lbl">Objective</div><div id="hud-obj-text"></div><div id="hud-obj-meta"></div></div>
+      <div id="hud-toasts"></div>
+    </div>
     <div id="hud-topright">
       <div id="hud-clock">08:30</div>
       <div id="hud-money">€0</div>
@@ -25,24 +30,28 @@
       <div id="hud-stars"></div>
       <div id="hud-weaponbox"><div id="hud-weapon"></div><div id="hud-ammo"></div></div>
     </div>
-    <div id="hud-notify"></div>
-    <div id="hud-objective"></div>
-    <div id="hud-timer"></div>
-    <div id="hud-counter"></div>
+    <div id="hud-centertop"><div id="hud-timer"></div><div id="hud-counter"></div></div>
     <div id="hud-minimapwrap">
-      <canvas id="minimap" width="220" height="220"></canvas>
+      <div id="hud-mapcard"><canvas id="minimap" width="440" height="440"></canvas><div id="hud-gpsdist"></div></div>
       <div id="hud-bars"><div class="bar hp"><div id="hud-health"></div></div><div class="bar ar"><div id="hud-armor"></div></div></div>
     </div>
     <div id="hud-area"><div id="hud-area-name"></div><div id="hud-area-sub"></div></div>
     <div id="hud-veh"></div>
     <div id="hud-road"></div>
-    <div id="hud-speed"><span id="hud-speed-val">0</span><small>km/h</small></div>
+    <div id="hud-speed">
+      <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"></circle><circle id="hud-speed-arc" class="val" cx="60" cy="60" r="52"></circle></svg>
+      <div class="spd"><span id="hud-speed-val">0</span><small>km/h</small><em id="hud-speed-alt"></em></div>
+      <div id="hud-vhp"><i></i></div>
+    </div>
+    <div id="hud-bonus"></div>
+    <div id="hud-wp"><i></i><span></span></div>
     <div id="hud-sub"></div>
     <div id="hud-prompt"></div>
-    <div id="hud-cross"><i></i><i></i><i></i><i></i></div>
-    <div id="hud-hit"></div>
+    <div id="hud-cross"><i></i><i></i><i></i><i></i><b></b></div>
+    <div id="hud-hit"><i></i><i></i><i></i><i></i></div>
     <div id="hud-scope"></div>
     <div id="hud-big"><div id="hud-big-title"></div><div id="hud-big-sub"></div></div>
+    <div id="hud-click">Click to take control</div>
     <div id="hud-fps"></div>
   </div>
 
@@ -50,20 +59,22 @@
 
   <!-- ================= Screens ================= -->
   <div id="scr-loading" class="screen show">
-    <div class="logo"><span>AUTOBAHN</span><span>OUTLAWS</span></div>
-    <div class="flagbar"><i></i><i></i><i></i></div>
-    <div id="load-box"><div id="load-bar"></div></div>
-    <div id="load-text">Loading…</div>
-    <div class="tip" id="load-tip"></div>
+    <div class="load-inner">
+      <div class="logo"><span>AUTOBAHN</span><span>OUTLAWS</span></div>
+      <div class="flagbar"><i></i><i></i><i></i></div>
+      <div id="load-box"><div id="load-bar"></div></div>
+      <div id="load-text">Loading…</div>
+      <div class="tip" id="load-tip"></div>
+    </div>
   </div>
 
   <div id="scr-menu" class="screen">
     <div class="menu-inner">
       <div class="logo"><span>AUTOBAHN</span><span>OUTLAWS</span></div>
       <div class="flagbar"><i></i><i></i><i></i></div>
-      <p class="tagline">Open-world crime across Germany · Kein Tempolimit</p>
+      <p class="tagline">Open-world crime across Germany. Kein Tempolimit.</p>
       <div class="btns">
-        <button data-act="continue" id="btn-continue">Continue</button>
+        <button data-act="continue" id="btn-continue" class="primary">Continue</button>
         <button data-act="new">New Game</button>
         <button data-act="settings">Settings</button>
         <button data-act="controls">Controls</button>
@@ -72,11 +83,26 @@
       </div>
       <p class="small" id="menu-note">Best with keyboard &amp; mouse or a gamepad. Click the game to capture the mouse.</p>
     </div>
+    <div class="menu-chips"><span>34 cities</span><span>46 Autobahn links</span><span>10 story missions</span><span>Races · Stunts · Side jobs</span></div>
+  </div>
+
+  <div id="scr-intro" class="screen">
+    <div class="panel intro">
+      <div class="eyebrow">Hamburg · Freitag, 09:00</div>
+      <h2>Welcome to Germany</h2>
+      <p>You are <b>Luka</b>. Four years in Santa Fu prison are over, and all you have is <b>€500</b> and a phone number. <b>Onkel Hans</b> from the harbour says he has work for someone who can drive fast and keep quiet.</p>
+      <ul class="intro-list">
+        <li><b>Follow the yellow GPS</b> to the next story mission and press <kbd>E</kbd> in the marker.</li>
+        <li><b>Earn money</b> with side jobs: car export contracts, cash trucks, taxi fares, races and stunt jumps.</li>
+        <li><b>Spend it</b> at the Waffenladen (guns) and the Autohaus (cars). Save at your Wohnung.</li>
+      </ul>
+      <div class="btns row"><button data-act="intro-go" class="primary">Let's go</button><button data-act="back" class="ghost">Back</button></div>
+    </div>
   </div>
 
   <div id="scr-pause" class="screen">
     <div class="panel">
-      <h2>Pause</h2>
+      <h2>Paused</h2>
       <div class="btns">
         <button data-act="resume">Resume</button>
         <button data-act="map">Map</button>

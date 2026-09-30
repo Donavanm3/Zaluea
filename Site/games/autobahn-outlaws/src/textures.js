@@ -17,8 +17,8 @@ export function facadeTextures() {
     for (let gy = 0; gy < 8; gy++) {
       for (let gx = 0; gx < 8; gx++) {
         const x = gx * C, y = gy * C;
-        // subtle plaster noise
-        ctx.fillStyle = `rgba(0,0,0,${0.02 + rng() * 0.03})`;
+        // subtle plaster variation
+        ctx.fillStyle = `rgba(0,0,0,${0.008 + rng() * 0.014})`;
         ctx.fillRect(x, y, C, C);
         // window frame + glass
         ctx.fillStyle = '#e9e5dc';
@@ -53,7 +53,16 @@ export function facadeTextures() {
       }
     }
   }, { repeat: true });
-  cache.facade = { map, emissive };
+  // Glossy window panes, matte plaster.
+  const rough = canvasTexture(S, S, (ctx) => {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, S, S);
+    ctx.fillStyle = '#262626';
+    for (let gy = 0; gy < 8; gy++) {
+      for (let gx = 0; gx < 8; gx++) ctx.fillRect(gx * C + C * 0.26, gy * C + C * 0.2, C * 0.48, C * 0.54);
+    }
+  }, { repeat: true, linear: true });
+  cache.facade = { map, emissive, rough };
   return cache.facade;
 }
 
@@ -96,6 +105,38 @@ export function glassTextures() {
   }, { repeat: true });
   cache.glass = { map, emissive };
   return cache.glass;
+}
+
+// Tileable ripple normal map for water (sum of integer-frequency waves).
+export function waterNormalTexture() {
+  if (cache.waterN) return cache.waterN;
+  const S = 256, rng = mulberry32(42), waves = [];
+  while (waves.length < 16) {
+    const kx = Math.round((rng() - 0.5) * 18), kz = Math.round((rng() - 0.5) * 18);
+    if (kx || kz) waves.push([kx, kz, rng() * Math.PI * 2, 1 / Math.hypot(kx, kz)]);
+  }
+  const h = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      let v = 0;
+      for (const w of waves) v += Math.sin(((w[0] * x + w[1] * y) / S) * Math.PI * 2 + w[2]) * w[3];
+      h[y * S + x] = v;
+    }
+  }
+  cache.waterN = canvasTexture(S, S, (ctx) => {
+    const img = ctx.createImageData(S, S);
+    for (let y = 0; y < S; y++) {
+      for (let x = 0; x < S; x++) {
+        const dx = h[y * S + ((x + 1) % S)] - h[y * S + ((x + S - 1) % S)];
+        const dy = h[((y + 1) % S) * S + x] - h[((y + S - 1) % S) * S + x];
+        const nx = -dx * 6, ny = -dy * 6, l = Math.hypot(nx, ny, 1);
+        const i = (y * S + x) * 4;
+        img.data[i] = (nx / l * 0.5 + 0.5) * 255; img.data[i + 1] = (ny / l * 0.5 + 0.5) * 255; img.data[i + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }, { repeat: true, linear: true, anisotropy: 8 });
+  return cache.waterN;
 }
 
 // Round soft particle sprite.

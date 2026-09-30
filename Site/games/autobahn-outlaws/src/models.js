@@ -2,10 +2,12 @@
 import * as THREE from 'three';
 import { Builder, profileGeometry, UNIT_CYL, UNIT_SPHERE, pick } from './util.js';
 
-export const charMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-export const vehMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+export const charMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0 });
+export const vehMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.35 });
+export const vehGlassMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.06, metalness: 0.55, envMapIntensity: 1.6 });
+export const wheelMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.25 });
 export const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
-export const burntMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+export const burntMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.95, metalness: 0.1 });
 
 // ---------------- People ----------------
 export const SKIN = [0xf1c9a5, 0xe0ac86, 0xc68e63, 0x8d5a3b, 0x5e3a24, 0xf5d4b8];
@@ -147,6 +149,16 @@ function wheelGeo(r, w) {
   return b.build();
 }
 const wheelCache = {};
+
+// Routes parts drawn in the glass colour to their own mesh so windows can be reflective.
+class SplitBuilder {
+  constructor(glass) { this.main = new Builder(); this.glass = new Builder(); this.g = glass; }
+  to(c) { return c === this.g ? this.glass : this.main; }
+  add(geo, color, ...r) { this.to(color).add(geo, color, ...r); }
+  box(w, h, d, x, y, z, color, ...r) { this.to(color).box(w, h, d, x, y, z, color, ...r); }
+  cyl(r, h, x, y, z, color, ...a) { this.to(color).cyl(r, h, x, y, z, color, ...a); }
+  geo(g, color, ...r) { this.to(color).geo(g, color, ...r); }
+}
 function getWheel(r, w) {
   const k = r + '_' + w;
   if (!wheelCache[k]) { wheelCache[k] = wheelGeo(r, w); wheelCache[k].userData.keep = true; }
@@ -155,13 +167,13 @@ function getWheel(r, w) {
 
 export function buildVehicleModel(def, color) {
   const group = new THREE.Group();
-  const b = new Builder(), glow = new Builder();
-  const W = def.W, L = def.L;
   const glass = 0x1e2a36, dark = 0x202022, chrome = 0xb8bcc0;
+  const b = new SplitBuilder(glass), glow = new Builder();
+  const W = def.W, L = def.L;
   const wheels = [];
   const extras = {};
   const addWheel = (x, z, r, w, front) => {
-    const m = new THREE.Mesh(getWheel(r, w), vehMat);
+    const m = new THREE.Mesh(getWheel(r, w), wheelMat);
     const pivot = new THREE.Group();
     pivot.position.set(x, r, z);
     pivot.add(m);
@@ -308,11 +320,17 @@ export function buildVehicleModel(def, color) {
     extras.rotor = rotor; extras.tailRotor = trot;
   }
 
-  const body = new THREE.Mesh(b.build(), vehMat);
+  const body = new THREE.Mesh(b.main.build(), vehMat);
   body.castShadow = true;
   body.receiveShadow = true;
   group.add(body);
+  let glassMesh = null;
+  if (b.glass.parts.length) {
+    glassMesh = new THREE.Mesh(b.glass.build(), vehGlassMat);
+    glassMesh.castShadow = true;
+    group.add(glassMesh);
+  }
   const lights = new THREE.Mesh(glow.build(), glowMat);
   group.add(lights);
-  return { group, body, lights, wheels, extras };
+  return { group, body, glass: glassMesh, lights, wheels, extras };
 }

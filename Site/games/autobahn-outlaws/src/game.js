@@ -24,7 +24,7 @@ export const G = {
   dt: 0,
   clock: 8.5, // in-game hour 0..24
   money: 0,
-  stats: { kills: 0, copsKilled: 0, carsStolen: 0, distance: 0, missions: 0, gnomes: 0, wantedMax: 0, deaths: 0, arrests: 0, topSpeed: 0 },
+  stats: { kills: 0, copsKilled: 0, carsStolen: 0, distance: 0, missions: 0, gnomes: 0, wantedMax: 0, deaths: 0, arrests: 0, topSpeed: 0, exports: 0, bonus: 0 },
   flags: {},
 };
 

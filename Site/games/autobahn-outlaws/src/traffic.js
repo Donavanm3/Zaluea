@@ -320,7 +320,7 @@ export class Traffic {
     return 'pendler';
   }
 
-  spawnNear(center, minD, maxD) {
+  spawnNear(center, minD, maxD, forceType = null, color = undefined) {
     const net = G.world.roads;
     // random edge point near the centre
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -339,9 +339,9 @@ export class Traffic {
       let blocked = false;
       for (const o of G.vehicles.list) if (Math.hypot(o.pos.x - p.x, o.pos.z - p.z) < 12) { blocked = true; break; }
       if (blocked) continue;
-      const type = this.pickType(e, p.x, p.z);
+      const type = forceType || this.pickType(e, p.x, p.z);
       if (type === 'bus' && e.type !== 'city') continue;
-      const v = new Vehicle(type, p.x, p.y, p.z, 0);
+      const v = new Vehicle(type, p.x, p.y, p.z, 0, color);
       v.mode = 'kinematic';
       const ai = new TrafficAI(v, e, dir, s, lane);
       v.ai = ai;

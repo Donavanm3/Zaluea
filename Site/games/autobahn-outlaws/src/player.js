@@ -82,7 +82,10 @@ export class Player {
 
   onDamage(a, src, kind) {
     this.regenT = 0;
-    if (G.hud) G.hud.damageFlash(Math.min(1, a / 30));
+    if (G.hud) {
+      G.hud.damageFlash(Math.min(1, a / 30));
+      if (src && src !== this.char && kind !== 'fall') G.hud.damageFrom(src);
+    }
   }
 
   onDeath() {

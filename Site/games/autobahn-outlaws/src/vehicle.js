@@ -127,8 +127,9 @@ export class Vehicle {
       if (this.siren) {
         this.sirenT += dt;
         const on = Math.floor(this.sirenT * 6) % 2 === 0;
-        lb[0].color.setHex(on ? 0x2050ff : 0x0a0a30);
-        lb[1].color.setHex(on ? 0x0a0a30 : 0x2050ff);
+        // HDR colours so the flashing side blooms
+        lb[0].color.setHex(on ? 0x2050ff : 0x0a0a30).multiplyScalar(on ? 5 : 1);
+        lb[1].color.setHex(on ? 0x0a0a30 : 0x2050ff).multiplyScalar(on ? 1 : 5);
       } else {
         lb[0].color.setHex(0x1a2a60); lb[1].color.setHex(0x1a2a60);
       }
@@ -420,6 +421,7 @@ export class Vehicle {
     this.siren = false;
     this.body = this.model.body;
     this.model.body.material = burntMat;
+    if (this.model.glass) this.model.glass.material = burntMat;
     this.model.lights.visible = false;
     if (this.model.extras.lightbar) this.model.extras.lightbar.forEach((m) => m.color.setHex(0x111111));
     this.vy = this.cls === 'heli' ? this.vy : 7;

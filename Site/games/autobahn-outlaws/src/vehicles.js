@@ -190,6 +190,7 @@ export class VehicleManager {
         if (d >= rr || d < 1e-4) continue;
         const nx = dx / d, nz = dz / d;
         const pen = rr - d;
+        a.hitT = b.hitT = G.time;
         // kinematic cars become physical when hit
         for (const v of [a, b]) {
           if (v.mode === 'kinematic') {

@@ -66,11 +66,11 @@ function lampGlowGeo() {
 
 export function sharedCityMaterials() {
   const f = facadeTextures(), g = glassTextures();
-  const wallMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: f.map, emissiveMap: f.emissive, emissive: 0xffd9a0, emissiveIntensity: 0 });
-  const glassMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: g.map, emissiveMap: g.emissive, emissive: 0xe8f0ff, emissiveIntensity: 0 });
-  const miscMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const wallMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: f.map, emissiveMap: f.emissive, roughnessMap: f.rough, emissive: 0xffd9a0, emissiveIntensity: 0, roughness: 0.85, metalness: 0 });
+  const glassMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: g.map, emissiveMap: g.emissive, emissive: 0xe8f0ff, emissiveIntensity: 0, roughness: 0.14, metalness: 0.55, envMapIntensity: 1.4 });
+  const miscMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.02 });
   const lampMat = new THREE.MeshBasicMaterial({ color: 0x808070 });
-  const signMat = new THREE.MeshLambertMaterial({ map: serviceSignTexture().tex, emissive: 0xffffff, emissiveMap: serviceSignTexture().tex, emissiveIntensity: 0.15 });
+  const signMat = new THREE.MeshStandardMaterial({ map: serviceSignTexture().tex, emissive: 0xffffff, emissiveMap: serviceSignTexture().tex, emissiveIntensity: 0.15, roughness: 0.4 });
   const glowMat = new THREE.MeshBasicMaterial({ map: glowTexture(), color: 0xffc070, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
   return { wallMat, glassMat, miscMat, lampMat, signMat, glowMat };
 }
@@ -151,7 +151,7 @@ export function buildCity(world, grid, mats) {
       misc.box(lx - 0.09, top, lz - 0.09, lx + 0.09, top + 6, lz + 0.09, 0x3d4045);
       heads.box(lx - 0.35, top + 5.8, lz - 0.35, lx + 0.35, top + 6.15, lz + 0.35, 0xffffff, true, true);
       P.addCircle(lx, lz, 0.15, top, top + 6, { lamp: true });
-      grid.lampPositions.push({ x: lx, z: lz });
+      grid.lampPositions.push({ x: lx, z: lz, y: top + 5.6 });
     }
     // Parking spots: along north and south edges on the street
     if (R() < 0.8) grid.parking.push({ x: b.cx + (R() - 0.5) * 16, z: b.minZ - 1.3, y: y0, heading: Math.PI / 2 });

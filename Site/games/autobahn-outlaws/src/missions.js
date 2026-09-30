@@ -407,6 +407,23 @@ const RACES = [
 ];
 
 export class Missions {
+  // Next story mission while free roaming (used for GPS and the objective card).
+  get freeTarget() {
+    if (this.active || this.taxi || this.vigil || !this.startMarker) return null;
+    return this.startMarker;
+  }
+  freeInfo() {
+    if (this.active || this.taxi || this.vigil) return null;
+    const ex = G.events ? G.events.exportLine() : '';
+    const s = this.startMarker;
+    if (s) {
+      const c = CONTACTS[s.def.contact];
+      const city = CITY_BY_ID[s.def.city];
+      return { label: `Story · mission ${this.progress + 1} of ${STORY.length}`, text: `<b>${s.def.title}</b> — meet ${c.name}${city ? ' in ' + city.name : ''}. Follow the yellow GPS.${ex}` };
+    }
+    return { label: 'Free roam', text: `Story complete! Races, stunt jumps, gnomes and side jobs are still waiting.${ex}` };
+  }
+
   get gpsTarget() {
     if (this.active) return this.active.gpsTarget || null;
     if (this.taxi) return this.taxiTarget || null;
@@ -435,7 +452,7 @@ export class Missions {
       if (!e) continue;
       const fwd = e.from === r.cities[0];
       const p = G.world.roads.pointAt(e, fwd ? 30 : e.len - 30);
-      const mk = G.hud.addMarker(p.x + p.rx * (fwd ? 4.5 : -4.5), p.y, p.z + p.rz * (fwd ? 4.5 : -4.5), { r: 3.5, color: 0x40c0ff });
+      const mk = G.hud.addMarker(p.x + p.rx * (fwd ? 4.5 : -4.5), p.y, p.z + p.rz * (fwd ? 4.5 : -4.5), { r: 3.5, color: 0x40c0ff, beam: true });
       this.raceMarkers.push({ race: r, mk, x: mk.x, z: mk.z, y: mk.y });
       void c;
     }
@@ -446,7 +463,7 @@ export class Missions {
     const def = STORY[this.progress];
     if (!def) return;
     const s = def.start();
-    this.startMarker = { def, x: s.x, y: s.y, z: s.z, mk: G.hud.addMarker(s.x, s.y, s.z, { r: 1.6, color: 0xf2c200 }) };
+    this.startMarker = { def, x: s.x, y: s.y, z: s.z, mk: G.hud.addMarker(s.x, s.y, s.z, { r: 1.6, color: 0xf2c200, beam: true }) };
   }
 
   blips() {
@@ -569,6 +586,10 @@ export class Missions {
     G.audio.ui('pass');
     this.cleanup(false);
     this.placeStartMarker();
+    if (!m.isRace && this.startMarker) {
+      const next = this.startMarker.def;
+      setTimeout(() => G.hud.notify(`📱 ${CONTACTS[next.contact].name} has a new job: ${next.title}. Follow the yellow GPS.`, 6), 5000);
+    }
     if (G.save) G.save.autosave();
   }
 

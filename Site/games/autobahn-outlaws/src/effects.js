@@ -4,7 +4,7 @@ import { particleTexture } from './textures.js';
 import { G } from './game.js';
 
 class ParticleSystem {
-  constructor(scene, max, blending) {
+  constructor(scene, max, blending, boost = 1) {
     this.max = max;
     this.n = 0;
     this.pos = new Float32Array(max * 3);
@@ -25,10 +25,15 @@ class ParticleSystem {
     geo.setAttribute('psize', this.sa);
     geo.setDrawRange(0, 0);
     const mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: particleTexture() }, scale: { value: 600 } },
+      uniforms: { map: { value: particleTexture() }, scale: { value: 600 }, boost: { value: boost } },
       vertexShader: `attribute vec4 pcolor; attribute float psize; varying vec4 vC; uniform float scale;
         void main(){ vC = pcolor; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = psize * scale / -mv.z; gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: `uniform sampler2D map; varying vec4 vC; void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vC.rgb, vC.a * t.a); if (gl_FragColor.a < 0.01) discard; }`,
+      // Colours are given in sRGB; convert to linear so they match the lit scene (and glow in HDR).
+      fragmentShader: `uniform sampler2D map; uniform float boost; varying vec4 vC;
+        void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(pow(vC.rgb, vec3(2.2)) * boost, vC.a * t.a); if (gl_FragColor.a < 0.01) discard;
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
       transparent: true, depthWrite: false, blending,
     });
     this.mat = mat;
@@ -89,7 +94,7 @@ export class Effects {
   constructor(scene, quality) {
     this.scene = scene;
     const mult = quality === 'low' ? 0.5 : 1;
-    this.add = new ParticleSystem(scene, Math.floor(2500 * mult), THREE.AdditiveBlending);
+    this.add = new ParticleSystem(scene, Math.floor(2500 * mult), THREE.AdditiveBlending, 3);
     this.norm = new ParticleSystem(scene, Math.floor(3000 * mult), THREE.NormalBlending);
     // Tracers
     this.maxTr = 64;
@@ -245,7 +250,7 @@ export class Effects {
       const s = b.r * (0.4 + k * 1.1);
       b.m.scale.setScalar(s);
       b.m.material.opacity = (1 - k) * 0.9;
-      b.m.material.color.setRGB(1, 0.65 - k * 0.4, 0.25 - k * 0.2);
+      b.m.material.color.setRGB(1, 0.65 - k * 0.4, 0.25 - k * 0.2).multiplyScalar(4 * (1 - k) + 1);
     }
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 2.5);
   }

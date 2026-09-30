@@ -63,7 +63,7 @@ export function buildNature(world, quality) {
   for (const t of world.cityTrees || []) addTree(t.x, t.y, t.z, t.s, t.kind, false);
 
   const [conGeo, decGeo] = treeGeometries();
-  const treeMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0 });
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
   world.treeChunks = [];
   const treeGroup = new THREE.Group();

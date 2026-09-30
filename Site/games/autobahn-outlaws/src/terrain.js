@@ -456,7 +456,7 @@ export class Terrain {
     }
 
     const fieldTex = makeFieldTexture();
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.fieldMap = { value: fieldTex };
       shader.vertexShader = shader.vertexShader
@@ -467,7 +467,7 @@ export class Terrain {
         .replace('#include <color_fragment>', `#include <color_fragment>
           vec3 fc = texture2D(fieldMap, vWXZ / 760.0).rgb;
           float gn = fract(sin(dot(floor(vWXZ * 0.5), vec2(12.9898, 78.233))) * 43758.5453);
-          diffuseColor.rgb = mix(diffuseColor.rgb, fc, vFarm * 0.85) * (0.96 + 0.08 * gn);`);
+          diffuseColor.rgb = mix(diffuseColor.rgb, fc, vFarm * 0.85) * (0.98 + 0.04 * gn);`);
     };
     const group = new THREE.Group();
     group.name = 'terrain';

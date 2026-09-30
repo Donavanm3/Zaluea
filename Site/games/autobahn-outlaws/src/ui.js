@@ -4,6 +4,11 @@ import { WEAPONS, WEAPON_ORDER } from './weapons.js';
 import { storeSettings } from './save.js';
 import { formatMoney, pick } from './util.js';
 import { buildVehicleModel } from './models.js';
+import { VEHICLES } from './vehicle.js';
+import { exportPrice } from './events.js';
+
+// Autohaus stock: vehicle id, price. Helicopters are delivered to the nearest helipad.
+const DEALER = [['rennpappe', 1800], ['pendler', 2600], ['kombi', 3400], ['adler', 5200], ['transporter', 4200], ['blitz', 6500], ['falke', 18000], ['libelle', 45000]];
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,7 +22,7 @@ const CONTROLS = [
 
 export class UI {
   constructor() {
-    this.screens = ['menu', 'pause', 'settings', 'controls', 'credits', 'shop', 'loading'];
+    this.screens = ['menu', 'intro', 'pause', 'settings', 'controls', 'credits', 'shop', 'loading'];
     this.back = null;
     this.shopType = null;
     this.bindButtons();
@@ -48,6 +53,10 @@ export class UI {
     switch (act) {
       case 'new':
         if (G.save.has() && !confirm('Start a new game? Your saved progress will be overwritten.')) return;
+        this.back = 'menu';
+        this.show('intro');
+        break;
+      case 'intro-go':
         G.save.wipe();
         G.startGame(null);
         break;
@@ -89,13 +98,22 @@ export class UI {
 
   updatePauseStats() {
     const s = G.stats;
+    const M = G.missions;
+    const done = M.progress + (G.pickups.collected ? G.pickups.collected.size : 0) / 30 + (G.stunts ? G.stunts.done.size / Math.max(1, G.stunts.ramps.length) : 0);
+    const pct = Math.round((done / 12) * 100);
+    const f = M.freeInfo();
+    const next = M.active ? `Current mission: <b>${M.active.def.title}</b>` : f ? f.text.replace(/<span class="sub">.*<\/span>/, '') : '';
+    const ex = G.events ? G.events.exportList.map((id) => `${VEHICLES[id].name} (${formatMoney(exportPrice(id))})`).join(' · ') : '';
     $('pause-stats').innerHTML = `
+      <div class="progress"><span>Game progress · ${pct}%</span><div class="pbar"><i style="width:${pct}%"></i></div><div class="next">${next}</div>${ex ? `<div class="next small">Export list: ${ex}</div>` : ''}</div>
       <div><span>Money</span><b>${formatMoney(G.money)}</b></div>
       <div><span>Story missions</span><b>${G.missions.progress} / 10</b></div>
       <div><span>Garden gnomes</span><b>${G.pickups.collected ? G.pickups.collected.size : 0} / 30</b></div>
       <div><span>Stunt jumps</span><b>${G.stunts ? G.stunts.done.size : 0} / ${G.stunts ? G.stunts.ramps.length : 0}</b></div>
       <div><span>Kills</span><b>${s.kills}</b></div>
       <div><span>Vehicles stolen</span><b>${s.carsStolen}</b></div>
+      <div><span>Cars exported</span><b>${s.exports || 0}</b></div>
+      <div><span>Driving bonuses</span><b>${formatMoney(s.bonus || 0)}</b></div>
       <div><span>Distance driven</span><b>${(s.distance * 0.1545).toFixed(1)} km</b></div>
       <div><span>Top speed</span><b>${Math.round(s.topSpeed)} km/h</b></div>
       <div><span>Highest wanted level</span><b>${'★'.repeat(s.wantedMax) || '—'}</b></div>
@@ -158,6 +176,7 @@ export class UI {
     this.show('shop');
   }
   closeShop() {
+    if (G.state !== 'shop') return;
     this.hideAll();
     G.state = 'play';
     G.input.lock();
@@ -165,7 +184,16 @@ export class UI {
   renderShop() {
     const P = G.player;
     const rows = [];
-    if (this.shopType === 'gunshop') {
+    if (this.shopType === 'autohaus') {
+      $('shop-title').textContent = 'Autohaus';
+      $('shop-sub').textContent = 'Car dealer — brand new, full tank, no questions asked. Delivered to the street outside.';
+      for (const [id, price] of DEALER) {
+        const d = VEHICLES[id];
+        const kmh = Math.round(d.maxSpeed * 3.6);
+        rows.push(`<div class="shop-row"><div class="sn">${d.cls === 'heli' ? '🚁' : d.cls === 'bike' ? '🏍️' : '🚗'} ${d.name}<small>Top speed ${kmh} km/h · ${d.cls === 'heli' ? 'delivered to the nearest helipad' : `export value ${formatMoney(exportPrice(id))}`}</small></div>
+          <button data-act="buy" data-kind="car" data-item="${id}" ${G.money < price ? 'disabled' : ''}>Buy · ${formatMoney(price)}</button></div>`);
+      }
+    } else if (this.shopType === 'gunshop') {
       $('shop-title').textContent = 'Waffenladen';
       $('shop-sub').textContent = 'Gun shop — weapons & ammunition';
       for (const id of WEAPON_ORDER) {
@@ -188,7 +216,37 @@ export class UI {
     if (kind === 'weapon' && G.money >= w.price) { G.money -= w.price; P.giveWeapon(item, w.ammoPack); P.switchTo(item); G.audio.ui('buy'); }
     else if (kind === 'ammo' && G.money >= w.ammoPrice) { G.money -= w.ammoPrice; P.giveWeapon(item, w.ammoPack); G.audio.ui('buy'); }
     else if (kind === 'armor' && G.money >= 600) { G.money -= 600; P.char.armor = 100; G.audio.ui('buy'); }
+    else if (kind === 'car') {
+      const e = DEALER.find((d) => d[0] === item);
+      if (e && G.money >= e[1] && this.deliverCar(item)) { G.money -= e[1]; G.audio.ui('buy'); }
+    }
     this.renderShop();
+  }
+
+  // Spawn a bought vehicle on the street in front of the dealer (or on a helipad).
+  deliverCar(id) {
+    const P = G.player.char;
+    const d = VEHICLES[id];
+    let x, y, z, h;
+    if (d.cls === 'heli') {
+      let best = null, bd = Infinity;
+      for (const p of G.world.pads) if (p.type === 'helipad') { const q = Math.hypot(p.x - P.pos.x, p.z - P.pos.z); if (q < bd) { bd = q; best = p; } }
+      if (!best) return false;
+      x = best.x; y = best.y + 0.3; z = best.z; h = 0;
+    } else {
+      const net = G.world.roads;
+      const near = net.nearestOnRoad(P.pos.x, P.pos.z, 40);
+      if (!near) return false;
+      const p = net.pointAt(near.edge, near.s);
+      x = p.x + p.rx * 2.6; z = p.z + p.rz * 2.6; y = p.y; h = Math.atan2(p.tx, p.tz);
+    }
+    const blocking = G.vehicles.list.filter((o) => o !== G.player.vehicle && !o.persist && Math.hypot(o.pos.x - x, o.pos.z - z) < 5);
+    for (const o of blocking) { G.traffic.release(o); G.vehicles.remove(o); }
+    const v = G.vehicles.spawn(id, x, y, z, h);
+    v.persist = true; v.owned = true;
+    G.hud.notify(`Your new ${d.name} is waiting ${d.cls === 'heli' ? 'on the helipad (GPS set)' : 'outside'}. Enjoy!`, 5);
+    if (d.cls === 'heli') G.hud.setWaypoint(x, z);
+    return true;
   }
 
   // ---------- world interactions (E) ----------
@@ -202,12 +260,12 @@ export class UI {
       const reach = s.type === 'respray' || s.type === 'fuel' ? 7 : 2.6;
       if (d < reach && d < bd && Math.abs(s.y - pp.y) < 3) { bd = d; best = s; }
     }
-    let text = G.hud.missionPrompt || null;
+    let text = G.hud.missionPrompt || G.hud.eventPrompt || null;
     if (best && !text) {
       const inV = !!P.vehicle;
       switch (best.type) {
         case 'gunshop': if (!inV) text = 'Press <b>E</b> — <b>Waffenladen</b> (gun shop)'; break;
-        case 'respray': text = inV ? `Press <b>E</b> — <b>Lackiererei</b>: respray car ${formatMoney(250)}${G.police.level ? ' (loses the cops if unseen)' : ''}` : 'Lackiererei — drive a car in here to respray it.'; break;
+        case 'respray': text = inV ? `Press <b>E</b> — <b>Lackiererei</b>: respray car ${formatMoney(250)}${G.police.level ? ' (loses the cops if unseen)' : ''}` : 'Press <b>E</b> — <b>Autohaus</b>: buy a car · drive in to respray'; break;
         case 'hospital': if (!inV) text = `Press <b>E</b> — <b>Krankenhaus</b>: full heal ${formatMoney(100)}`; break;
         case 'safehouse': if (!inV) text = 'Press <b>E</b> — <b>Wohnung</b>: save game & sleep 6 hours'; break;
         case 'fuel': text = `Press <b>E</b> — <b>Tankstelle</b>: Currywurst ${formatMoney(15)} (+50 health)${inV ? ' · repair car ' + formatMoney(200) : ''}`; break;
@@ -226,7 +284,7 @@ export class UI {
     switch (s.type) {
       case 'gunshop': if (!P.vehicle) this.openShop('gunshop'); break;
       case 'respray':
-        if (!P.vehicle) return;
+        if (!P.vehicle) { this.openShop('autohaus'); return; }
         if (G.money < 250) { G.hud.notify('Not enough money.', 2); return; }
         G.money -= 250;
         {
@@ -235,6 +293,8 @@ export class UI {
           v.model.body.geometry.dispose();
           const nm = buildVehicleModel(v.def, col);
           v.model.body.geometry = nm.body.geometry;
+          if (nm.glass) nm.glass.geometry.dispose();
+          nm.lights.geometry.dispose();
           v.color = col;
           v.hp = v.def.hp;
           v.burning = 0;

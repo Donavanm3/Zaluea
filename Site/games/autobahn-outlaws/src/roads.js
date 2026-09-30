@@ -368,8 +368,13 @@ export class RoadNet {
     const group = new THREE.Group();
     group.name = 'roads';
     const abTex = makeAutobahnTexture(false), landTex = makeAutobahnTexture(true), cityTex = makeCityStreetTexture();
-    const mk = (tex) => new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+    const mk = (tex) => {
+      const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.88, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+      m.userData.wet = [0.88, 0.32];
+      return m;
+    };
     const abMat = mk(abTex), landMat = mk(landTex), cityMat = mk(cityTex);
+    this.wetMats = [abMat, landMat, cityMat];
 
     // Autobahn / land roads
     const ab = { pos: [], uv: [], idx: [], nrm: [] };
@@ -494,12 +499,12 @@ export class RoadNet {
       }
     }
     if (br.parts.length) {
-      const bm = new THREE.Mesh(br.build(), new THREE.MeshLambertMaterial({ vertexColors: true }));
+      const bm = new THREE.Mesh(br.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
       bm.castShadow = bm.receiveShadow = quality !== 'low';
       group.add(bm);
     }
     if (rail.parts.length) {
-      const rm = new THREE.Mesh(rail.build(), new THREE.MeshLambertMaterial({ vertexColors: true }));
+      const rm = new THREE.Mesh(rail.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.6 }));
       group.add(rm);
     }
     this.decks = this.decks || [];
@@ -615,8 +620,9 @@ export class RoadNet {
     g.setIndex(idx);
     g.computeBoundingSphere();
     const grp = new THREE.Group();
-    grp.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex })));
-    if (post.parts.length) grp.add(new THREE.Mesh(post.build(), new THREE.MeshLambertMaterial({ vertexColors: true })));
+    grp.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0 })));
+    if (post.parts.length) grp.add(new THREE.Mesh(post.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.6 })));
+    this.signMat = grp.children[0].material;
     return grp;
   }
 }
@@ -627,7 +633,7 @@ function makeAutobahnTexture(narrow) {
     ctx.fillRect(0, 0, w, h);
     const img = ctx.getImageData(0, 0, w, h);
     for (let i = 0; i < img.data.length; i += 4) {
-      const v = (Math.random() - 0.5) * 18;
+      const v = (Math.random() - 0.5) * 9;
       img.data[i] += v; img.data[i + 1] += v; img.data[i + 2] += v;
     }
     ctx.putImageData(img, 0, 0);
@@ -660,7 +666,7 @@ function makeCityStreetTexture() {
     ctx.fillRect(0, 0, w, h);
     const img = ctx.getImageData(0, 0, w, h);
     for (let i = 0; i < img.data.length; i += 4) {
-      const v = (Math.random() - 0.5) * 14;
+      const v = (Math.random() - 0.5) * 8;
       img.data[i] += v; img.data[i + 1] += v; img.data[i + 2] += v;
     }
     ctx.putImageData(img, 0, 0);

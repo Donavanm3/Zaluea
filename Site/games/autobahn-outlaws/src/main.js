@@ -22,6 +22,11 @@ import { updateRotors } from './nature.js';
 import { lerp } from './util.js';
 import { TouchControls } from './touch.js';
 import { Stunts } from './stunts.js';
+import { RenderPipeline } from './render.js';
+import { LampLights } from './lamps.js';
+import { Events } from './events.js';
+import { waterTime } from './world.js';
+import { vehGlassMat, glowMat as vehLightMat } from './models.js';
 
 const TIPS = [
   'There is no general speed limit on the Autobahn — but the police still care about the rest.',
@@ -61,7 +66,8 @@ async function boot() {
   const canvas = $('game');
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: q !== 'low', powerPreference: 'high-performance' });
+    // Medium/high antialias through the multisampled HDR target in render.js.
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   } catch (e) {
     fatal('Could not start the 3D renderer: ' + e.message);
     return;
@@ -71,6 +77,8 @@ async function boot() {
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+  renderer.info.autoReset = false;
+  G.post = new RenderPipeline(renderer, q);
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
     if (G.state === 'play') G.ui.pause();
@@ -85,6 +93,8 @@ async function boot() {
     const pr = Math.min(devicePixelRatio || 1, q === 'high' ? 2 : q === 'medium' ? 1.5 : 1);
     renderer.setPixelRatio(pr);
     renderer.setSize(innerWidth, innerHeight, false);
+    const db = renderer.getDrawingBufferSize(new THREE.Vector2());
+    G.post.setSize(db.x, db.y);
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     if (G.fx) {
@@ -134,11 +144,13 @@ async function boot() {
   G.ui = new UI();
   G.vehicles.initSpots();
   G.stunts = new Stunts();
+  G.events = new Events();
 
   // Headlight for the player's vehicle (always present so shaders never recompile)
   const head = new THREE.SpotLight(0xfff2d8, 0, 70, 0.55, 0.6, 1.2);
   scene.add(head, head.target);
   G.headlight = head;
+  G.lamps = new LampLights(scene, q);
 
   // Player placeholder at Hamburg for the menu flyover
   const hs = world.services.find((s) => s.type === 'safehouse' && s.city === 'hamburg') || { x: CITY_BY_ID.hamburg.x, y: CITY_BY_ID.hamburg.y, z: CITY_BY_ID.hamburg.z };
@@ -204,8 +216,8 @@ function startGame(save) {
     G.missions.init(0, {});
     G.pickups.initGnomes([]);
     G.stunts.init([]);
-    G.hud.notify('Welcome to Autobahn Outlaws! Walk into the yellow marker and press E to start your first mission.', 7);
-    setTimeout(() => G.hud.notify('Controls: WASD move · Mouse look · F steal/enter cars · M map · Esc pause.', 6), 600);
+    G.hud.notify('WASD move · Mouse look · F steal or enter a car · M map · Esc pause', 7);
+    setTimeout(() => G.hud.notify('Side job: cars on the export list pay cash at any export dock.', 6), 9000);
   }
   // ground snap
   c.pos.y = G.physics.groundAt(c.pos.x, c.pos.z, c.pos.y + 2);
@@ -253,7 +265,8 @@ function loop(now) {
     if (G.state === 'pause' && I.pressed('pause') && G.ui.current === 'pause' && performance.now() - (G.ui.pausedAt || 0) > 350) G.ui.resume();
     else if (G.state === 'shop' && I.pressed('pause')) G.ui.closeShop();
     commonUpdate(dt);
-    G.renderer.render(G.scene, G.camera);
+    G.renderer.info.reset();
+    G.post.render(G.scene, G.camera);
   } catch (e) {
     console.error(e);
     if (!G._errShown) { G._errShown = true; G.hud && G.hud.notify('Error: ' + e.message, 8); }
@@ -284,6 +297,7 @@ function stepGame(dt) {
   G.stunts.update(dt);
   G.player.updateCamera(dt);
   G.missions.update(dt);
+  G.events.update(dt);
   G.ui.updateInteractions();
   G.hud.update(dt);
   G.audio.update();
@@ -305,12 +319,30 @@ function commonUpdate(dt) {
   const cam = G.camera;
   const focus = G.state === 'menu' ? cam.position : G.player.pos;
   G.sky.update(G.clock, cam.position, focus, G.state === 'play' ? dt : dt * 0.2);
-  // night lighting
-  const night = G.sky.night;
-  for (const m of G.world.nightMats) m.emissiveIntensity = night * 0.95;
-  G.world.cityMats.lampMat.color.setRGB(0.4 + night * 0.6, 0.4 + night * 0.55, 0.35 + night * 0.35);
-  G.world.cityMats.glowMat.opacity = night * 0.55;
-  G.world.cityMats.glowMat.visible = night > 0.05;
+  G.sky.updateEnv(G.renderer, dt);
+  // night lighting (HDR values above 1 make lamps and windows bloom)
+  const night = G.sky.night, W = G.world;
+  for (const m of W.nightMats) m.emissiveIntensity = night * 1.35;
+  W.cityMats.lampMat.color.setRGB(0.4 + night * 3.6, 0.4 + night * 2.9, 0.35 + night * 1.6);
+  W.cityMats.glowMat.opacity = night * 0.55;
+  W.cityMats.glowMat.visible = night > 0.05;
+  W.cityMats.signMat.emissiveIntensity = 0.15 + night * 0.9;
+  if (W.roads.signMat) W.roads.signMat.emissiveIntensity = night * 0.3;
+  vehLightMat.color.setScalar(1 + night * 2.2);
+  const wet = G.sky.weather;
+  for (const m of W.wetMats) m.roughness = lerp(m.userData.wet[0], m.userData.wet[1], wet);
+  vehGlassMat.roughness = 0.06 + wet * 0.1;
+  waterTime.value += dt;
+  // screen grading
+  const post = G.post;
+  post.exposure = 1 + night * 0.5;
+  G.lamps.update(dt, cam.position, night);
+  post.hurt = 0; post.grey = 0;
+  if (G.state === 'play' || G.state === 'pause') {
+    const P = G.player, hp = P.char.health / P.char.maxHealth;
+    if (P.dead || P.busted) post.grey = Math.min(1, P.deadT * 0.6);
+    else if (hp < 0.35) post.hurt = ((0.35 - hp) / 0.35) * (0.55 + 0.25 * Math.sin(G.time * 5));
+  }
   // headlight
   const hl = G.headlight;
   const v = G.player && G.player.vehicle;

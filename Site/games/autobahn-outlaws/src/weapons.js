@@ -87,10 +87,11 @@ export class Weapons {
         const killed = c.damage(dmg, shooter, _d, r.target.head, 'bullet');
         G.fx.impact(r.x, r.y, r.z, -_d.x, -_d.y, -_d.z, 'blood');
         if (c.onShot) c.onShot(shooter);
-        if (isPlayer) G.police.onPlayerHit(c, killed);
+        if (isPlayer) { G.police.onPlayerHit(c, killed); G.hud.hitMarker(killed); }
       } else if (r.target && r.target.kind === 'veh') {
         const v = r.target.v;
         v.damage(dmg * 0.65, shooter, 'bullet');
+        if (isPlayer) G.hud.hitMarker(v.dead);
         G.fx.impact(r.x, r.y, r.z, -_d.x, -_d.y, -_d.z, 'spark');
         if (Math.random() < 0.5) G.audio.shot('metal', r);
         if (v.ai && v.ai.onShot) v.ai.onShot(shooter);
@@ -134,7 +135,7 @@ export class Weapons {
       const killed = hit.damage(w.dmg * (attacker.isPlayer ? 1 : 0.7), attacker, _d, false, 'melee');
       if (hit.onShot) hit.onShot(attacker);
       hit.vel.x += fx * 3; hit.vel.z += fz * 3;
-      if (attacker.isPlayer) G.police.onPlayerHit(hit, killed, true);
+      if (attacker.isPlayer) { G.police.onPlayerHit(hit, killed, true); G.hud.hitMarker(killed); }
       G.fx.impact(hit.pos.x, hit.pos.y + 1.5, hit.pos.z, -fx, 0, -fz, 'blood');
     }
     return hit;
