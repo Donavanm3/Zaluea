@@ -79,6 +79,22 @@ python3 -m http.server 8000
 
 and open the printed address. Inside the Zaluea site it is listed on the Games page.
 
+### One-click launcher with macOS Automator
+
+`tools/start-game.command` starts the game server on port 3000 in the background and opens the game in your
+browser. You can double-click it in Finder, or wrap it in an Automator app:
+
+1. Open **Automator** → **New Document** → choose **Application**.
+2. Search the actions for **Run Shell Script** and drag it into the workflow.
+3. Set **Shell** to `/bin/bash` and replace the text with the path to the script in your copy of the repo, e.g.
+   `"$HOME/Zaluea/tools/start-game.command"` (keep the quotes).
+4. **File → Save**, name it *Autobahn Outlaws* and save it to **Applications**.
+
+Double-click the new app to play. The first time, macOS may ask to let Automator access the folder the repo is
+in — click **OK**. The server keeps running in the background; stop it with `tools/stop-game.command` (you can
+make a second Automator app for it the same way). If Node.js isn't installed, the launcher falls back to the
+Mac's Python 3, and shows an alert if neither is available.
+
 ## Publishing
 
 - **itch.io (HTML5)**: run `npm run package:game` in the repository root. It creates
