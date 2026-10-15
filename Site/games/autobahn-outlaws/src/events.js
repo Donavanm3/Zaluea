@@ -1,9 +1,10 @@
-// Free-roam gameplay: car export contracts, cash-truck robberies and driving
-// bonuses (near misses, drifts, big air, top speed) with a combo multiplier.
+// Free-roam gameplay: car export contracts, cash-truck robberies, street crimes
+// (purse snatchers, petrol station hold-ups) and driving bonuses with a combo multiplier.
 import { G } from './game.js';
 import { VEHICLES } from './vehicle.js';
 import { CITY_BY_ID } from './geo.js';
-import { clamp, formatMoney, pick } from './util.js';
+import { randomLook } from './models.js';
+import { clamp, formatMoney, pick, rand } from './util.js';
 
 const EXPORT_POOL = ['pendler', 'adler', 'kombi', 'falke', 'rennpappe', 'taxi', 'transporter', 'blitz', 'polizei', 'rtw', 'brummi', 'bus'];
 const DOCK_CITIES = ['hamburg', 'bremen', 'rostock', 'kiel', 'berlin', 'koeln', 'frankfurt', 'muenchen', 'stuttgart', 'leipzig', 'nuernberg', 'hannover'];
@@ -37,12 +38,14 @@ export class Events {
     this.near = new Map();
     this.drift = 0; this.driftEnd = 0; this.air = 0; this.stuntAir = false; this.fastT = 0; this.fastCool = 0;
     this.combo = 1; this.comboT = 0;
+    this.crime = null;
+    this.crimeT = 75;
   }
 
   // ---------- queries used by the HUD ----------
   wantedCar() {
     const v = G.player.vehicle;
-    return v && !v.dead && !v.mission && this.exportList.includes(v.type) ? v : null;
+    return v && !v.dead && !v.mission && !v.owned && this.exportList.includes(v.type) ? v : null;
   }
   nearestDock(p) {
     let best = null, bd = Infinity;
@@ -56,6 +59,8 @@ export class Events {
     if (G.missions.active) return null;
     const t = this.truck;
     if (t && !t.dropped && !t.v.dead) return t.v.pos;
+    const cr = this.crime;
+    if (cr) { const a = cr.ents.find((e) => e.alive); if (a) return a.pos; }
     if (this.wantedCar()) return this.nearestDock(G.player.pos);
     return null;
   }
@@ -63,6 +68,10 @@ export class Events {
     if (G.missions.active || G.missions.taxi || G.missions.vigil) return null;
     const t = this.truck;
     if (t && !t.dropped) return { label: 'Cash truck', text: `A <b>Geldtransporter</b> is on the road nearby. Wreck it and grab the cash. <span class="sub">${Math.ceil(t.t)} s before it reaches the depot</span>` };
+    const cr = this.crime;
+    if (cr) return cr.kind === 'thief'
+      ? { label: 'Street crime', text: `Stop the <b>purse snatcher</b> (red) before he gets away. <span class="sub">${Math.ceil(cr.t)} s</span>` }
+      : { label: 'Armed robbery', text: `Robbers are holding up the <b>Tankstelle</b>. Take them down (${cr.ents.filter((e) => !e.alive).length}/${cr.ents.length}). <span class="sub">${Math.ceil(cr.t)} s</span>` };
     const v = this.wantedCar();
     if (v) {
       const d = this.nearestDock(G.player.pos);
@@ -82,6 +91,7 @@ export class Events {
       const d = this.nearestDock(G.player.pos);
       if (d) out.push({ x: d.x, z: d.z, color: '#3ec5ff', text: 'X', always: true, label: 'Export dock' });
     }
+    if (this.crime) for (const e of this.crime.ents) if (e.alive) out.push({ x: e.pos.x, z: e.pos.z, color: '#ef4444', size: 5, always: true });
     return out;
   }
 
@@ -92,7 +102,95 @@ export class Events {
     if (P.dead || P.busted) { this.drift = 0; this.air = 0; return; }
     this.updateExport(dt);
     this.updateTruck(dt);
+    this.updateCrime(dt);
     this.updateBonuses(dt);
+  }
+
+  // ---------- street crimes ----------
+  updateCrime(dt) {
+    const P = G.player;
+    const cr = this.crime;
+    if (!cr) {
+      if ((this.crimeT -= dt) > 0 || G.missions.active || G.police.level > 0 || this.truck) return;
+      this.crimeT = 25;
+      if (Math.random() < 0.55 ? !this.startThief() : !this.startRobbery()) this.startThief() || this.startRobbery();
+      return;
+    }
+    cr.t -= dt;
+    const alive = cr.ents.filter((e) => e.alive);
+    if (cr.kind === 'thief') {
+      const th = cr.ents[0];
+      if (th.alive) { th.ai.state = 'flee'; th.ai.timer = 5; th.ai.fleeFrom = { x: P.pos.x, z: P.pos.z }; }
+      const far = Math.hypot(th.pos.x - P.pos.x, th.pos.z - P.pos.z) > 220;
+      if (th.alive && (cr.t <= 0 || far)) return this.endCrime('The purse snatcher got away.');
+    } else {
+      for (const e of alive) if (e.ai.state !== 'fight' && Math.hypot(e.pos.x - P.pos.x, e.pos.z - P.pos.z) < 32) { e.ai.state = 'fight'; e.ai.target = P.char; e.ai.timer = 60; }
+      if (!alive.length) {
+        const pay = 900 + Math.floor(Math.random() * 6) * 100;
+        G.money += pay;
+        G.hud.bigMessage('ROBBERY STOPPED', '#22c55e', `The Tankstelle owner thanks you · +${formatMoney(pay)}`, 4);
+        G.audio.ui('pass');
+        if (G.skills) G.skills.charge(10);
+        return this.endCrime(null);
+      }
+      if (cr.t <= 0 || Math.hypot(cr.x - P.pos.x, cr.z - P.pos.z) > 450) return this.endCrime('The robbers escaped with the cash.');
+    }
+  }
+
+  endCrime(msg) {
+    const cr = this.crime;
+    if (!cr) return;
+    for (const e of cr.ents) { e.ai.persist = false; e.ai.blip = null; }
+    if (msg) G.hud.notify(msg, 3);
+    this.crime = null;
+    this.crimeT = rand(110, 200);
+  }
+
+  startThief() {
+    const P = G.player;
+    if (!G.hud.currentCity || P.vehicle && Math.abs(P.vehicle.speed) > 20) return false;
+    const victim = G.peds.list.find((c) => c.alive && c.ai.role === 'civ' && c.ai.state === 'walk' && Math.hypot(c.pos.x - P.pos.x, c.pos.z - P.pos.z) < 65 && Math.hypot(c.pos.x - P.pos.x, c.pos.z - P.pos.z) > 15)
+      || G.peds.spawnCivilian(P.pos, 25, 55);
+    if (!victim || victim.ai.role !== 'civ') return false;
+    const th = G.peds.spawnAt(victim.pos.x + 1.2, victim.pos.y, victim.pos.z, { ...randomLook(), jacket: 0x1a1a1a, shirt: 0x2a2a2a, cap: 0x111111, female: false }, 'thief');
+    th.ai.persist = true;
+    th.ai.speedWalk = 1.5;
+    th.ai.state = 'flee';
+    th.ai.timer = 5;
+    th.ai.fleeFrom = { x: P.pos.x, z: P.pos.z };
+    victim.ai.state = 'cower'; victim.ai.timer = 6;
+    const wallet = 150 + Math.floor(Math.random() * 6) * 50;
+    th.onKilled = (killer) => {
+      G.pickups.spawn('money', th.pos.x, th.pos.y, th.pos.z, wallet, null, { life: 60 });
+      if (killer && killer.isPlayer) { G.hud.notify('You stopped the thief — grab the wallet!', 3); if (G.skills) G.skills.charge(6); }
+      this.endCrime(null);
+    };
+    this.crime = { kind: 'thief', ents: [th], t: 70 };
+    G.audio.ui('wanted');
+    G.hud.notify('🆘 „Hilfe, mein Geldbeutel!“ A purse snatcher is running away — stop him!', 5);
+    return true;
+  }
+
+  startRobbery() {
+    const P = G.player;
+    let best = null, bd = 420;
+    for (const s of G.world.services) {
+      if (s.type !== 'fuel') continue;
+      const d = Math.hypot(s.x - P.pos.x, s.z - P.pos.z);
+      if (d < bd && d > 90) { bd = d; best = s; }
+    }
+    if (!best) return false;
+    const ents = [];
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2, x = best.x + Math.cos(a) * 4, z = best.z + Math.sin(a) * 4;
+      const r = G.peds.spawnAt(x, G.physics.groundAt(x, z, best.y + 2), z, { ...randomLook(), jacket: 0x111111, shirt: 0x1a1a1a, helmet: 0x1a1a1a, female: false }, 'gang', pick(['pistol', 'smg', 'shotgun']));
+      r.ai.persist = true; r.ai.state = 'idle'; r.ai.accuracy = 0.38; r.ai.dropMoney = 120; r.health = 90;
+      ents.push(r);
+    }
+    this.crime = { kind: 'robbery', ents, t: 150, x: best.x, z: best.z };
+    G.audio.ui('wanted');
+    G.hud.notify('📻 Police scanner: armed robbery in progress at a Tankstelle nearby! Red blips on the map.', 6);
+    return true;
   }
 
   updateExport() {
@@ -110,7 +208,7 @@ export class Events {
     if (d > 7) return;
     if (G.police.level > 0) { G.hud.eventPrompt = 'Lose the police first — the buyer won\'t take a hot car.'; return; }
     if (Math.abs(v.speed) > 3) { G.hud.eventPrompt = 'Stop the car in the marker to hand it over.'; return; }
-    const hpF = clamp(v.hp / v.def.hp, 0.3, 1);
+    const hpF = clamp(v.hp / v.maxHp, 0.3, 1);
     const pay = Math.round((exportPrice(v.type) * hpF) / 10) * 10;
     G.money += pay;
     G.stats.exports = (G.stats.exports || 0) + 1;
@@ -138,7 +236,7 @@ export class Events {
       if (!v) return;
       v.persist = true;
       v.cashTruck = true;
-      v.hp = v.def.hp * 1.3; // armoured
+      v.hp = v.maxHp = v.def.hp * 1.3; // armoured
       this.truck = { v, t: 150, dropped: false, cleanup: 0 };
       G.audio.ui('phone');
       G.hud.notify('📻 Police scanner: a Geldtransporter (cash truck) is driving nearby. Follow the green € blip.', 6);
@@ -181,13 +279,14 @@ export class Events {
     const pay = Math.round(amount * this.combo);
     G.money += pay;
     G.stats.bonus = (G.stats.bonus || 0) + pay;
+    if (G.skills) { G.skills.charge(3); G.skills.add('driving', 0.25); }
     G.hud.bonus(this.combo > 1 ? `${text} ×${this.combo}` : text, pay, this.combo > 1);
   }
 
   updateBonuses(dt) {
     if ((this.comboT -= dt) <= 0) this.combo = 1;
     const v = G.player.vehicle;
-    if (!v || v.dead || v.cls === 'heli' || v.cls === 'boat') { this.drift = 0; this.air = 0; this.near.clear(); return; }
+    if (!v || v.dead || v.cls === 'heli' || v.cls === 'boat' || v.cls === 'plane') { this.drift = 0; this.air = 0; this.near.clear(); return; }
     const spd = Math.abs(v.speed);
     const recentHit = (x) => G.time - (x.hitT || -99) < 1.5;
     // Near misses: another vehicle passes within a hair at speed without touching.

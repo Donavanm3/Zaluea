@@ -21,6 +21,8 @@ export const VEHICLES = {
   blitz: { name: 'Blitz 1000 Motorrad', cls: 'bike', shape: 'bike', L: 2.1, W: 0.7, H: 1.2, mass: 260, maxSpeed: 74, accel: 15, brake: 20, steer: 0.72, wheelbase: 1.5, grip: 1.15, hp: 450, sound: 'bike', colors: [0xd01c1c, 0x1a1a1c, 0x2a6ad0, 0xf2f2f2, 0x2aa04a] },
   speedboot: { name: 'Speedboot Hanse', cls: 'boat', shape: 'boat', L: 6.5, W: 2.4, H: 1.5, mass: 1500, maxSpeed: 36, accel: 7.5, brake: 8, steer: 0.9, wheelbase: 4, grip: 0.3, hp: 1000, sound: 'boat', colors: [0x1f4f9a, 0xc0392b, 0x1a1a1c, 0x2e7d32] },
   libelle: { name: 'Hubschrauber Libelle', cls: 'heli', shape: 'heli', L: 11, W: 2.4, H: 3.2, mass: 2500, maxSpeed: 48, accel: 16, brake: 10, steer: 1.4, wheelbase: 4, grip: 1, hp: 1300, sound: 'heli', colors: [0xf2f2f2, 0xd01c1c, 0x1a1a1c, 0xf2c200] },
+  falkner: { name: 'Falkner F-2 Sportflugzeug', cls: 'plane', shape: 'plane', L: 7.6, W: 10.4, H: 2.5, bodyW: 1.3, mass: 900, maxSpeed: 72, accel: 9, brake: 7, steer: 1, wheelbase: 3.4, grip: 1, hp: 900, sound: 'plane', stall: 30, colors: [0xf2f2f2, 0xd01c1c, 0x1f4fd0, 0xf2c200] },
+  kranich: { name: 'Kranich K-7 Frachtflugzeug', cls: 'plane', shape: 'cargo', L: 17, W: 22, H: 6, bodyW: 3, mass: 12000, maxSpeed: 82, accel: 6.5, brake: 5, steer: 0.6, wheelbase: 7, grip: 1, hp: 2400, sound: 'plane', stall: 36, colors: [0xe8ebef, 0x5a6470, 0x3a4a3a] },
   polizeiheli: { name: 'Polizeihubschrauber', cls: 'heli', shape: 'heli', L: 11, W: 2.4, H: 3.2, mass: 2500, maxSpeed: 50, accel: 16, brake: 10, steer: 1.4, wheelbase: 4, grip: 1, hp: 1600, sound: 'heli', colors: [0xdde2e6], police: true },
 };
 
@@ -28,6 +30,12 @@ const GRAV = 18;
 
 function computeCircles(d) {
   if (d.cls === 'heli') return [{ z: 1.2, r: 1.6 }, { z: -2.5, r: 1.1 }];
+  if (d.cls === 'plane') {
+    const r = d.bodyW / 2 + 0.3, n = Math.max(3, Math.ceil(d.L / (r * 2.2)));
+    const out = [];
+    for (let i = 0; i < n; i++) out.push({ z: -(d.L / 2 - r) + (i / (n - 1)) * (d.L - 2 * r), r });
+    return out;
+  }
   if (d.cls === 'bike') return [{ z: 0.55, r: 0.45 }, { z: -0.55, r: 0.45 }];
   const r = d.W / 2;
   const n = Math.max(2, Math.ceil(d.L / d.W));
@@ -58,6 +66,8 @@ export class Vehicle {
     this.vy = 0;
     this.onGround = true;
     this.hp = d.hp;
+    this.maxHp = d.hp;
+    this.mods = null; // garage upgrades (engine, brakes, armor, turbo)
     this.dead = false;
     this.burning = 0;
     this.sinkT = 0;
@@ -94,7 +104,7 @@ export class Vehicle {
       if (this.deadT < 30 && Math.random() < 0.2) G.fx.smoke(this.pos.x, this.pos.y + 1.5, this.pos.z, 0.9, 1.5);
       this.vel.multiplyScalar(1 - Math.min(1, dt * 2));
       this.pos.x += this.vel.x * dt; this.pos.z += this.vel.z * dt;
-      if (this.cls === 'heli' || !this.onGround) {
+      if (this.cls === 'heli' || this.cls === 'plane' || !this.onGround) {
         this.vy -= GRAV * dt;
         this.pos.y += this.vy * dt;
         const g = G.physics.groundAt(this.pos.x, this.pos.z, this.pos.y + 1, 1);
@@ -107,6 +117,7 @@ export class Vehicle {
     if (this.mode === 'kinematic') {
       this.groundFollow(dt, true);
     } else if (this.cls === 'heli') this.updateHeli(dt);
+    else if (this.cls === 'plane') this.updatePlane(dt);
     else if (this.cls === 'boat') this.updateBoat(dt);
     else this.updateCar(dt);
 
@@ -160,14 +171,17 @@ export class Vehicle {
       return;
     }
     if (this.onGround) {
-      const maxS = d.maxSpeed * (this.hp < 250 ? 0.6 : 1) * (this.boost || 1);
+      const m = this.mods;
+      const accel = d.accel * (m ? 1 + m.engine * 0.12 + (m.turbo ? 0.22 : 0) : 1);
+      const brake = d.brake * (m ? 1 + m.brakes * 0.18 : 1);
+      const maxS = d.maxSpeed * (this.hp < 250 ? 0.6 : 1) * (this.boost || 1) * (m ? 1 + m.engine * 0.06 + (m.turbo ? 0.04 : 0) : 1);
       if (c.throttle > 0.01) {
-        if (vF < -0.5) vF += d.brake * c.throttle * dt;
-        else vF += d.accel * c.throttle * (1 - Math.pow(clamp(vF / maxS, 0, 1), 2)) * dt;
+        if (vF < -0.5) vF += brake * c.throttle * dt;
+        else vF += accel * c.throttle * (1 - Math.pow(clamp(vF / maxS, 0, 1), 2)) * dt;
       }
       if (c.brake > 0.01) {
-        if (vF > 0.5) vF -= d.brake * c.brake * dt;
-        else if (vF > -maxS * 0.28) vF -= d.accel * 0.7 * c.brake * dt;
+        if (vF > 0.5) vF -= brake * c.brake * dt;
+        else if (vF > -maxS * 0.28) vF -= accel * 0.7 * c.brake * dt;
       }
       const coast = c.throttle < 0.01 && c.brake < 0.01;
       vF -= vF * (0.05 + (coast ? 0.25 : 0) + Math.abs(vF) * 0.0006) * dt;
@@ -175,7 +189,8 @@ export class Vehicle {
       if (coast && Math.abs(vF) < 0.4) vF *= 0.9;
       const steerMax = d.steer / (1 + Math.abs(vF) / 14);
       this.steerAngle = lerp(this.steerAngle, c.steer * steerMax, Math.min(1, dt * 7));
-      const wet = G.sky && G.sky.weather > 0.5 ? 0.82 : 1;
+      // Driving skill gives the player up to 12% more grip.
+      const wet = (G.sky && G.sky.weather > 0.5 ? 0.82 : 1) * (this.driver === 'player' && G.skills ? 1 + 0.12 * G.skills.get('driving') : 1);
       const grip = d.grip * (c.handbrake ? 0.22 : 1) * wet;
       // geometric yaw rate, capped by the lateral acceleration the tyres can take
       const yawGeo = (-vF * Math.tan(this.steerAngle)) / d.wheelbase;
@@ -355,8 +370,9 @@ export class Vehicle {
     const g = P.groundAt(this.pos.x, this.pos.z, this.pos.y + 1.5, 1.5);
     const onGround = this.pos.y <= g + 0.05;
     if (lift) {
-      if (!onGround || c.lift > 0) this.heading -= c.steer * 1.3 * dt;
-      const acc = (c.throttle - c.brake) * d.accel * (onGround ? 0 : 1);
+      const sk = this.driver === 'player' && G.skills ? 1 + 0.25 * G.skills.get('flying') : 1;
+      if (!onGround || c.lift > 0) this.heading -= c.steer * 1.3 * sk * dt;
+      const acc = (c.throttle - c.brake) * d.accel * sk * (onGround ? 0 : 1);
       this.vel.x += fx * acc * dt; this.vel.z += fz * acc * dt;
       const sx = -fz, sz = fx;
       if (c.strafe) { this.vel.x += sx * c.strafe * 8 * dt; this.vel.z += sz * c.strafe * 8 * dt; }
@@ -402,6 +418,92 @@ export class Vehicle {
       }
     }
     this.keepInWorld();
+  }
+
+  // Arcade flight model. ctrl.throttle/brake move the throttle lever, steer banks,
+  // lift pitches the nose (Space up, Shift/Ctrl down). Lift needs airspeed.
+  updatePlane(dt) {
+    const d = this.def, c = this.ctrl, P = G.physics;
+    const pilot = this.driver === 'player';
+    const sk = pilot && G.skills ? 1 + 0.25 * G.skills.get('flying') : 1;
+    if (this.driver) this.thr = clamp((this.thr || 0) + (c.throttle - c.brake) * dt * 0.7, 0, 1);
+    else this.thr = Math.max(0, (this.thr || 0) - dt * 0.4);
+    this.rotorSpeed = lerp(this.rotorSpeed, this.driver ? 0.3 + this.thr * 0.7 : 0, Math.min(1, dt * 1.5));
+    const g = P.groundAt(this.pos.x, this.pos.z, this.pos.y + 2, 2);
+    const onGround = this.pos.y <= g + 0.08;
+    const stall = d.stall || 30;
+    let v = this.air || 0;
+    v += (this.thr * d.accel - d.accel * (v * v) / (d.maxSpeed * d.maxSpeed)) * dt;
+    v -= 9.8 * Math.sin(this.pitch) * dt;
+    if (onGround) {
+      v -= v * (this.onRunway() ? 0.04 : 0.25) * dt;
+      if (c.brake > 0.1 && this.thr < 0.05) v -= Math.min(v, d.brake * dt);
+    }
+    v = Math.max(0, v);
+    const lift = clamp((v - stall * 0.6) / (stall * 0.4), 0, 1);
+    const auth = clamp(v / stall, 0.15, 1.3) * sk;
+    if (onGround) {
+      this.heading -= c.steer * 0.7 * clamp(v / 8, 0.2, 1) * dt;
+      this.roll = lerp(this.roll, 0, Math.min(1, dt * 6));
+      this.pitch = lerp(this.pitch, c.lift > 0 && lift > 0.95 ? 0.2 : 0, Math.min(1, dt * 1.8));
+      this.vy = lift >= 1 && this.pitch > 0.06 ? v * Math.sin(this.pitch) : 0;
+    } else {
+      this.roll = lerp(this.roll, c.steer * 0.95, Math.min(1, dt * 1.6 * auth));
+      this.pitch += c.lift * 0.75 * auth * dt;
+      if (Math.abs(c.lift) < 0.1) this.pitch -= this.pitch * 0.3 * dt;
+      this.pitch -= (1 - lift) * 0.8 * dt;
+      this.pitch = clamp(this.pitch, -1.1, 0.9);
+      this.heading -= (9.8 * Math.tan(this.roll) / Math.max(v, 12)) * 0.9 * dt;
+      this.vy = lerp(this.vy, v * Math.sin(this.pitch), lift * Math.min(1, dt * 4));
+      this.vy -= (1 - lift) * 9.8 * dt;
+    }
+    // Turn back at the edge of the map or the border.
+    const W = G.world, E = W.edges;
+    const out = this.pos.x < E.x0 + 60 || this.pos.x > E.x1 - 60 || this.pos.z < E.z0 + 60 || this.pos.z > E.z1 - 60;
+    if (out && G.time - (this._turnT || -9) > 3) {
+      this._turnT = G.time;
+      this.heading = Math.atan2((E.x0 + E.x1) / 2 - this.pos.x, (E.z0 + E.z1) / 2 - this.pos.z);
+      if (pilot) G.hud.notify('Edge of the map — turning back.', 2);
+    }
+    const hs = v * Math.cos(this.pitch);
+    const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
+    this.vel.x = fx * hs; this.vel.z = fz * hs;
+    this.pos.x += this.vel.x * dt;
+    this.pos.z += this.vel.z * dt;
+    this.pos.y += this.vy * dt;
+    if (this.pos.y > 900) { this.pos.y = 900; this.vy = Math.min(0, this.vy); }
+    const g2 = P.groundAt(this.pos.x, this.pos.z, this.pos.y + 2, 2);
+    if (this.pos.y <= g2) {
+      if (!onGround) {
+        const sink = -this.vy;
+        const hard = sink > 6.5 || Math.abs(this.roll) > 0.5 || this.pitch < -0.22 || v > d.maxSpeed * 0.9;
+        if (hard) { this.damage(this.maxHp * (sink > 14 || v > d.maxSpeed * 0.9 ? 2 : 0.5), null, 'crash'); G.audio.crash(this.pos, 1); if (pilot) G.fx.shake(1); }
+        else if (sink > 3) { this.damage(sink * 20, null, 'crash'); G.audio.crash(this.pos, 0.4); }
+      }
+      this.pos.y = g2;
+      this.vy = 0;
+      this.pitch = Math.max(0, Math.min(this.pitch, 0.2));
+    }
+    if (P.waterDepth(this.pos.x, this.pos.z, this.pos.y) > 0.8 && this.pos.y < 0.4) this.damage(this.maxHp * 2, null, 'crash');
+    this.air = v;
+    this.speed = v;
+    this.onGround = this.pos.y <= g2 + 0.08;
+    // fuselage vs buildings and trees
+    const tmp = this._tmp || (this._tmp = { x: 0, y: 0, z: 0 });
+    for (const cc of this.circles) {
+      tmp.x = this.pos.x + fx * cc.z; tmp.y = this.pos.y; tmp.z = this.pos.z + fz * cc.z;
+      const h = P.collideCircle(tmp, cc.r, d.H * 0.7, 0.3, this._hit);
+      if (!h.hit) continue;
+      this.pos.x += h.x; this.pos.z += h.z;
+      if (v > 10) { this.damage(v * 45, null, 'crash'); G.audio.crash(this.pos, 1); }
+      this.air = v * 0.3;
+      break;
+    }
+  }
+
+  onRunway() {
+    for (const a of G.world.airfields || []) if (Math.abs(this.pos.x - a.x) < 114 && Math.abs(this.pos.z - a.z) < 13) return true;
+    return false;
   }
 
   damage(amount, source, kind = 'bullet') {
@@ -468,6 +570,7 @@ export class Vehicle {
       ex.rotor.rotation.y += this.rotorSpeed * dt * 38;
       ex.tailRotor.rotation.x += this.rotorSpeed * dt * 50;
     }
+    if (ex.props) for (const p of ex.props) p.rotation.z += this.rotorSpeed * dt * 60;
   }
 
   dispose() {

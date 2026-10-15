@@ -147,6 +147,7 @@ export class Peds {
   onHurt(c, src) {
     const ai = c.ai;
     if (!c.alive) return;
+    if (ai.role === 'thief') { ai.state = 'flee'; ai.timer = 10; if (src) ai.fleeFrom = { x: src.pos.x, z: src.pos.z }; return; }
     if (ai.role === 'civ' || ai.role === 'vip') {
       if (src && src.isPlayer && Math.random() < 0.12 && ai.role === 'civ') { ai.state = 'fight'; ai.target = src; ai.timer = 10; }
       else { ai.state = 'flee'; ai.timer = 14; ai.fleeFrom = src ? { x: src.pos.x, z: src.pos.z } : { x: c.pos.x + 1, z: c.pos.z }; }
@@ -160,6 +161,7 @@ export class Peds {
     const killer = c.lastAttacker;
     if (killer && killer.isPlayer) {
       G.stats.kills++;
+      if (G.skills) G.skills.charge(6);
       if (ai.dropMoney > 0 && G.pickups) G.pickups.spawn('money', c.pos.x, c.pos.y, c.pos.z, ai.dropMoney);
       if (ai.role === 'cop' && G.pickups) G.pickups.spawn('weapon', c.pos.x + 0.5, c.pos.y, c.pos.z, 12, c.weapon === 'fist' ? 'pistol' : c.weapon);
       if (ai.role === 'gang' && c.weapon !== 'fist' && G.pickups) G.pickups.spawn('weapon', c.pos.x + 0.5, c.pos.y, c.pos.z, 20, c.weapon);

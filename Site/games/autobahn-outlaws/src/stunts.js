@@ -54,7 +54,7 @@ export class Stunts {
 
   update(dt) {
     const v = G.player.vehicle;
-    if (!v || v.cls === 'heli' || v.cls === 'boat') { this.jump = null; return; }
+    if (!v || v.cls === 'heli' || v.cls === 'boat' || v.cls === 'plane') { this.jump = null; return; }
     if (!this.jump) {
       if (v.onGround || v.vy <= 0.5) return;
       for (const r of this.ramps) {

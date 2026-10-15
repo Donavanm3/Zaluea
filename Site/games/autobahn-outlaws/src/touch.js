@@ -10,6 +10,8 @@ const BUTTONS = [
   { id: 'wpn', label: '⇄', action: 'wnext' },
   { id: 'sprint', label: '»', key: 'ShiftLeft', hold: true },
   { id: 'map', label: '🗺', key: 'KeyM' },
+  { id: 'phone', label: '📱', action: 'phone' },
+  { id: 'special', label: '⚡', action: 'special' },
   { id: 'pause', label: 'II', key: 'KeyP' },
 ];
 
@@ -93,7 +95,7 @@ export class TouchControls {
         el.classList.add('on');
         if (b.id === 'fire') { I.touch.fire = true; I.mousePressed |= 1; }
         else if (b.toggle) { this.aimOn = !this.aimOn; I.touch.aim = this.aimOn; el.classList.toggle('lock', this.aimOn); }
-        else if (b.action) I.gpPressed.add(b.action);
+        else if (b.action) I.extPressed.add(b.action);
         else if (b.key) {
           I.pressedSet.add(b.key);
           if (b.hold) I.down.add(b.key);

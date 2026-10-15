@@ -167,6 +167,63 @@ export class Police {
     this.spawnT = 0;
     this.flash = 0;
     this.gunfireHeat = 0;
+    this.roadblockT = 12;
+    // One pooled searchlight for police helicopters at night (always in the scene, so no shader recompiles).
+    this.light = new THREE.SpotLight(0xe8f0ff, 0, 170, 0.2, 0.45, 1.1);
+    this.lightTarget = new THREE.Vector3();
+    G.scene.add(this.light, this.light.target);
+  }
+
+  // Police cars parked across the road ahead of the player, with officers behind them.
+  spawnRoadblock() {
+    const v = G.player.vehicle;
+    if (!v || v.cls === 'heli' || v.cls === 'plane' || v.cls === 'boat') return false;
+    const spd = Math.hypot(v.vel.x, v.vel.z);
+    if (spd < 10) return false;
+    const net = G.world.roads;
+    const near = net.nearestOnRoad(v.pos.x, v.pos.z, 12);
+    if (!near) return false;
+    // look ahead along the direction of travel and snap to the same kind of road
+    const fx = v.vel.x / spd, fz = v.vel.z / spd;
+    let e = null, p = null;
+    for (const dist of [210, 180, 240, 150]) {
+      const n2 = net.nearestOnRoad(v.pos.x + fx * dist, v.pos.z + fz * dist, 30, (q) => q.type === near.edge.type);
+      if (!n2) continue;
+      const q = net.pointAt(n2.edge, n2.s);
+      if ((q.x - v.pos.x) * fx + (q.z - v.pos.z) * fz < 120) continue;
+      e = n2.edge; p = q;
+      break;
+    }
+    if (!p) return false;
+    const dir = p.tx * fx + p.tz * fz > 0 ? 1 : -1;
+    const offs = e.type === 'autobahn' ? [-0.82, -0.32, 0.32, 0.82] : [-0.45, 0.45];
+    for (const k of offs) {
+      const x = p.x + p.rx * k * e.half, z = p.z + p.rz * k * e.half;
+      if (G.vehicles.list.some((o) => Math.hypot(o.pos.x - x, o.pos.z - z) < 4)) continue;
+      const car = G.vehicles.spawn('polizei', x, p.y, z, Math.atan2(p.rx, p.rz) + rand(-0.35, 0.35));
+      car.siren = true; car.parked = true; car.ctrl.handbrake = true; car.roadblock = true;
+      this.spawnCop(x - p.tx * dir * 4, p.y + 1, z - p.tz * dir * 4, this.level >= 4);
+    }
+    G.hud.notify('🚧 Police roadblock ahead!', 2.5);
+    return true;
+  }
+
+  updateSearchlight(dt) {
+    const L = this.light;
+    const night = G.sky ? G.sky.night : 0;
+    let heli = null, hd = 320;
+    for (const h of this.helis) {
+      if (h.veh.dead) continue;
+      const d = Math.hypot(h.veh.pos.x - G.player.pos.x, h.veh.pos.z - G.player.pos.z);
+      if (d < hd) { hd = d; heli = h.veh; }
+    }
+    if (!heli || night < 0.3 || this.level === 0) { L.intensity = 0; this.lit = false; return; }
+    const P = G.player.pos;
+    this.lightTarget.lerp(P, Math.min(1, dt * (this.seen ? 1.3 : 0.5)));
+    L.position.set(heli.pos.x, heli.pos.y - 0.6, heli.pos.z);
+    L.target.position.copy(this.lightTarget);
+    L.intensity = 450 * night;
+    this.lit = Math.hypot(this.lightTarget.x - P.x, this.lightTarget.z - P.z) < 13;
   }
 
   setHeat(h) {
@@ -227,6 +284,9 @@ export class Police {
   }
 
   onGunfire(pos, big) {
+    // stopping an armed robbery doesn't make you the criminal
+    const cr = G.events && G.events.crime;
+    if (cr && cr.kind === 'robbery' && Math.hypot(pos.x - cr.x, pos.z - cr.z) < 90) return;
     if (this.nearCop(pos, 90) || this.witnessed(pos)) {
       this.gunfireHeat += big ? 1 : 0.25;
       if (this.level === 0 && this.gunfireHeat >= 0.25) this.crime('gunfire', pos, 1.01);
@@ -309,6 +369,7 @@ export class Police {
     }
     this.units = [];
     this.helis = [];
+    for (const v of G.vehicles.list) if (v.roadblock) v.siren = false;
     for (const c of this.cops) {
       if (!c.alive) continue;
       if (Math.hypot(c.pos.x - P.x, c.pos.z - P.z) > 50) G.peds.remove(c);
@@ -327,6 +388,7 @@ export class Police {
     // ambient patrol cars in traffic react to the player
     const P = G.player.pos;
     if (this.level === 0) {
+      this.light.intensity = 0;
       G.audio.setSiren(null);
       if (this.helis.length) { for (const h of this.helis) G.vehicles.remove(h.veh); this.helis = []; G.audio.setHeli(false); }
       return;
@@ -350,7 +412,7 @@ export class Police {
       }
       if (!seen) for (const h of this.helis) {
         if (h.veh.dead) continue;
-        if (Math.hypot(h.veh.pos.x - eye.x, h.veh.pos.z - eye.z) < 90 && G.sky.night < 0.6) { seen = true; break; }
+        if (Math.hypot(h.veh.pos.x - eye.x, h.veh.pos.z - eye.z) < 90 && (G.sky.night < 0.6 || this.lit)) { seen = true; break; }
       }
       this.seen = seen;
       if (seen) { this.lastSeen.copy(eye); this.evadeT = 0; }
@@ -382,6 +444,8 @@ export class Police {
       return c.alive;
     });
     this.helis = this.helis.filter((h) => !h.veh.dead && G.vehicles.list.includes(h.veh));
+    this.updateSearchlight(dt);
+    if (this.level >= 3 && this.seen && (this.roadblockT -= dt) <= 0) this.roadblockT = this.spawnRoadblock() ? rand(25, 40) : 4;
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
       this.spawnT = 2.2;

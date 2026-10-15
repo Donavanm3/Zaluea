@@ -25,6 +25,7 @@ export class HUD {
       toasts: $('hud-toasts'), objLbl: $('hud-obj-lbl'), objText: $('hud-obj-text'), objMeta: $('hud-obj-meta'), gpsDist: $('hud-gpsdist'),
       speedArc: $('hud-speed-arc'), speedAlt: $('hud-speed-alt'), vhp: $('hud-vhp').firstElementChild, bonus: $('hud-bonus'),
       wp: $('hud-wp'), wpText: $('hud-wp').querySelector('span'), click: $('hud-click'), dirdmg: $('hud-dirdmg'),
+      special: $('hud-special'), spbar: $('hud-spbar'),
     };
     this.toasts = [];
     this.objMission = '';
@@ -309,6 +310,11 @@ export class HUD {
     this.el.health.style.width = (hp * 100).toFixed(1) + '%';
     this.el.health.classList.toggle('low', hp < 0.3);
     this.el.armor.style.width = (ar * 100).toFixed(1) + '%';
+    if (G.skills) {
+      const sp = Math.round(G.skills.special);
+      if (this.last.sp !== sp) { this.last.sp = sp; this.el.special.style.width = sp + '%'; }
+      if (this.last.spOn !== G.skills.active) { this.last.spOn = G.skills.active; this.el.spbar.classList.toggle('active', G.skills.active); }
+    }
     // notifications
     for (const t of [...this.toasts]) if ((t.t -= dt) <= 0) this.dropToast(t);
     if (this.subT > 0) { this.subT -= dt; if (this.subT <= 0) this.el.sub.style.opacity = 0; }
@@ -325,15 +331,16 @@ export class HUD {
       if (this.last.kmh !== kmh) {
         this.last.kmh = kmh;
         this.el.speedVal.textContent = kmh;
-        const f = clamp(Math.abs(V.speed) / ((V.def.maxSpeed || 60) * 1.05), 0, 1);
+        const f = clamp(Math.abs(V.speed) / ((V.def.maxSpeed || 60) * (V.mods ? 1 + V.mods.engine * 0.06 + (V.mods.turbo ? 0.04 : 0) : 1) * 1.05), 0, 1);
         this.el.speedArc.style.strokeDasharray = `${(245 * f).toFixed(1)} 400`;
         this.el.speedArc.style.stroke = f > 0.9 ? '#ff8a00' : '';
       }
       if (this.last.speedOn !== true) { this.last.speedOn = true; this.el.speed.style.display = 'block'; }
       let alt = '';
-      if (V.cls === 'heli') alt = `ALT ${Math.round(V.pos.y - G.physics.terrain.heightAt(V.pos.x, V.pos.z))} m`;
+      if (V.cls === 'heli' || V.cls === 'plane') alt = `ALT ${Math.round(V.pos.y - G.physics.terrain.heightAt(V.pos.x, V.pos.z))} m`;
+      if (V.cls === 'plane') alt += ` · THR ${Math.round((V.thr || 0) * 100)}%`;
       if (this.last.alt !== alt) { this.last.alt = alt; this.el.speedAlt.textContent = alt; }
-      const vh = clamp(V.hp / V.def.hp, 0, 1);
+      const vh = clamp(V.hp / V.maxHp, 0, 1);
       const vk = Math.round(vh * 50);
       if (this.last.vhp !== vk) { this.last.vhp = vk; this.el.vhp.style.width = (vh * 100).toFixed(0) + '%'; this.el.vhp.classList.toggle('low', vh < 0.3); }
     } else if (this.last.speedOn !== false) { this.last.speedOn = false; this.el.speed.style.display = 'none'; }
@@ -429,7 +436,8 @@ export class HUD {
     const P = G.player.pos;
     const yaw = G.player.cam.yaw;
     const spd = G.player.vehicle ? Math.abs(G.player.vehicle.speed) : 0;
-    const scale = (G.player.vehicle && G.player.vehicle.cls === 'heli' ? 2.2 : 1.1) + clamp(spd / 50, 0, 1) * 1.1; // world m per minimap px
+    const vc = G.player.vehicle && G.player.vehicle.cls;
+    const scale = (vc === 'plane' ? 3.4 : vc === 'heli' ? 2.2 : 1.1) + clamp(spd / 50, 0, 1) * 1.1; // world m per minimap px
     const R = W / 2 - 4;
     const map = G.world.map;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -483,6 +491,7 @@ export class HUD {
         ctx.beginPath(); ctx.arc(sx, sy, size, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
     };
+    for (const a of G.world.airfields || []) drawBlip(a.x, a.z, '#475569', 6, '✈');
     for (const s of G.world.services) {
       if (Math.abs(s.x - P.x) > 400 || Math.abs(s.z - P.z) > 400) continue;
       const ic = SERVICE_ICON[s.type];
@@ -501,6 +510,8 @@ export class HUD {
     }
     if (this.waypoint) drawBlip(this.waypoint.x, this.waypoint.z, '#e879f9', 6, null, true);
     if (G.events) for (const b of G.events.blips()) drawBlip(b.x, b.z, b.color, b.size || 5, b.text, b.always);
+    if (G.garage) for (const b of G.garage.blips()) drawBlip(b.x, b.z, b.color, 5, b.text, b.color === '#3b82f6');
+    if (G.properties) for (const b of G.properties.blips()) drawBlip(b.x, b.z, b.color, 5, b.text);
     // search radius when wanted
     if (G.police.level > 0 && !G.police.seen) {
       const ls = G.police.lastSeen;
@@ -623,7 +634,8 @@ export class HUD {
       if (b.text) { ctx.fillStyle = '#000'; ctx.font = 'bold 11px Arial'; ctx.textBaseline = 'middle'; ctx.fillText(b.text, tx(b.x), tz(b.z) + 0.5); ctx.textBaseline = 'alphabetic'; }
       if (b.label && this.map.zoom > 1) { ctx.fillStyle = '#fff'; ctx.font = '12px Arial'; ctx.fillText(b.label, tx(b.x), tz(b.z) + 22); }
     }
-    if (G.events) for (const b of G.events.blips()) {
+    const airs = (G.world.airfields || []).map((a) => ({ x: a.x, z: a.z, color: '#475569', text: '✈', label: 'Flugplatz' }));
+    for (const b of [...airs, ...(G.events ? G.events.blips() : []), ...(G.garage ? G.garage.blips() : []), ...(G.properties && this.map.zoom > 1.2 ? G.properties.blips(true) : [])]) {
       ctx.fillStyle = b.color;
       ctx.beginPath(); ctx.arc(tx(b.x), tz(b.z), 8, 0, Math.PI * 2); ctx.fill();
       if (b.text) { ctx.fillStyle = '#fff'; ctx.font = 'bold 11px Arial'; ctx.textBaseline = 'middle'; ctx.fillText(b.text, tx(b.x), tz(b.z) + 0.5); ctx.textBaseline = 'alphabetic'; }
@@ -644,7 +656,7 @@ export class HUD {
     ctx.restore();
     // legend
     const leg = [['#f2c200', 'Story mission'], ['#e879f9', 'Waypoint (click)'], ['#3ec5ff', 'X Export dock'], ['#22c55e', '€ Cash truck'],
-      ['#e74c3c', 'H Hospital'], ['#f39c12', 'W Gun shop'], ['#9b59b6', 'L Respray · Autohaus'], ['#2ecc71', '⌂ Safehouse'], ['#40c0ff', '🏁 Race']];
+      ['#e74c3c', 'H Hospital'], ['#f39c12', 'W Gun shop'], ['#9b59b6', 'L Respray · Autohaus'], ['#2ecc71', '⌂ Safehouse'], ['#40c0ff', '🏁 Race'], ['#15803d', '€ Business for sale'], ['#3b82f6', '🚗 Your car'], ['#475569', '✈ Airfield']];
     const rows = Math.ceil(leg.length / 2), LH = 38 + rows * 20 + 26, LY = H - 16 - LH;
     ctx.fillStyle = 'rgba(12,14,20,0.78)';
     ctx.beginPath();

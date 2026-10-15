@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { G } from './game.js';
 import { Character } from './character.js';
 import { WEAPONS, WEAPON_ORDER } from './weapons.js';
-import { clamp, lerp, lerpAngle, wrapAngle } from './util.js';
+import { clamp, lerp, lerpAngle, wrapAngle, Builder } from './util.js';
+import { charMat } from './models.js';
 
 export const PLAYER_LOOK = {
   skin: 0xe8b894, hair: 0x2b1d14, shirt: 0xd8d8d0, pants: 0x28344a, shoes: 0x1a1a1a,
@@ -76,7 +77,7 @@ export class Player {
     const w = WEAPONS[this.weapon];
     const s = this.inv[this.weapon];
     if (!s || w.melee || w.throw || s.mag >= w.mag || s.ammo <= 0 || this.reloadT > 0) return;
-    this.reloadT = w.reload;
+    this.reloadT = w.reload * (1 - 0.3 * G.skills.get('shooting'));
     G.audio.shot('reload', this.char.pos);
   }
 
@@ -90,6 +91,7 @@ export class Player {
 
   onDeath() {
     if (this.dead) return;
+    if (this.chute) this.endChute();
     this.dead = true;
     this.deadT = 0;
     G.stats.deaths++;
@@ -172,11 +174,12 @@ export class Player {
     // health regeneration up to 50%
     this.regenT += dt;
     const c = this.char;
-    if (this.regenT > 6 && c.health < c.maxHealth * 0.5) c.health = Math.min(c.maxHealth * 0.5, c.health + dt * 4);
+    const regenCap = c.maxHealth * (0.5 + 0.2 * G.skills.get('stamina'));
+    if (this.regenT > 6 && c.health < regenCap) c.health = Math.min(regenCap, c.health + dt * 4);
 
     // look
     const sens = G.settings.sensitivity;
-    const [lx, ly] = I.consumeLook(dt, sens);
+    const [lx, ly] = I.consumeLook(G.realDt || dt, sens);
     if (Math.abs(lx) + Math.abs(ly) > 0.0005) this.cam.lastLook = G.time;
     const scopeMul = this.scoped ? 0.3 : 1;
     this.cam.yaw -= lx * scopeMul;
@@ -191,7 +194,87 @@ export class Player {
     if (I.pressed('reload')) this.reload();
 
     if (this.vehicle) this.updateVehicle(dt);
+    else if (this.chute) this.updateChute(dt);
     else this.updateFoot(dt);
+  }
+
+  // ---------- skydiving ----------
+  startFreefall(vx = 0, vy = 0, vz = 0) {
+    const c = this.char;
+    this.chute = { phase: 'free', t: 0 };
+    c.vel.set(vx, 0, vz);
+    c.vy = vy;
+    c.onGround = false;
+    c.setVisible(true);
+    c.pose = 'freefall';
+    G.hud.notify('Freefall! Press Space or F to open your parachute (it opens by itself near the ground).', 4);
+  }
+
+  canopyMesh() {
+    if (this._canopy) return this._canopy;
+    const b = new Builder();
+    for (let i = -3; i <= 3; i++) {
+      const a = i * 0.24;
+      b.box(1.25, 0.22, 2.7, Math.sin(a) * 4.2, Math.cos(a) * 4.2 - 4.2 + 3.6, 0, i % 2 ? 0xf2f2f2 : 0xd01c1c, 0, 0, -a);
+    }
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(0.03, 3.4, 0.03, sx * 1.4, 1.95, sz * 0.9, 0x333333, 0, sz * 0.25, -sx * 0.45);
+    this._canopy = new THREE.Mesh(b.build(), charMat);
+    this._canopy.geometry.userData.keep = true;
+    return this._canopy;
+  }
+
+  endChute() {
+    const c = this.char;
+    if (this._canopy) G.scene.remove(this._canopy);
+    this.chute = null;
+    c.pose = 'normal';
+  }
+
+  updateChute(dt) {
+    const I = G.input, c = this.char, ch = this.chute, P = G.physics;
+    ch.t += dt;
+    const g = P.groundAt(c.pos.x, c.pos.z, c.pos.y + 1, 0.4);
+    const agl = c.pos.y - g;
+    if (ch.phase === 'free') {
+      const yaw = this.cam.yaw, fx = Math.sin(yaw), fz = Math.cos(yaw);
+      const mx = I.moveX(), my = I.moveY();
+      const tx = (fx * my - fz * mx) * 16, tz = (fz * my + fx * mx) * 16;
+      c.vel.x = lerp(c.vel.x, tx, Math.min(1, dt * 1.2));
+      c.vel.z = lerp(c.vel.z, tz, Math.min(1, dt * 1.2));
+      c.vy = Math.max(c.vy - 9.8 * dt, -50);
+      c.heading = lerpAngle(c.heading, yaw, Math.min(1, dt * 3));
+      if (((I.pressed('jump') || I.pressed('enter') || I.firePressed()) && ch.t > 0.35) || agl < 45) {
+        ch.phase = 'open';
+        c.pose = 'chute';
+        G.scene.add(this.canopyMesh());
+        G.audio.ui('select');
+      }
+    } else {
+      c.heading -= I.moveX() * 1.1 * dt;
+      const my = I.moveY();
+      const fwd = 9 + my * 4;
+      c.vel.x = lerp(c.vel.x, Math.sin(c.heading) * fwd, Math.min(1, dt * 2));
+      c.vel.z = lerp(c.vel.z, Math.cos(c.heading) * fwd, Math.min(1, dt * 2));
+      c.vy = lerp(c.vy, -4.2 - Math.max(0, my) * 2 + Math.max(0, -my) * 1.6, Math.min(1, dt * 2.5));
+      const cm = this.canopyMesh();
+      cm.position.set(c.pos.x, c.pos.y + 1.6, c.pos.z);
+      cm.rotation.set(0, c.heading, -I.moveX() * 0.25, 'YXZ');
+      if (G.time - this.cam.lastLook > 1.2) this.cam.yaw = lerpAngle(this.cam.yaw, c.heading, Math.min(1, dt * 2));
+    }
+    c.pos.x += c.vel.x * dt; c.pos.z += c.vel.z * dt; c.pos.y += c.vy * dt;
+    P.collideCircle(c.pos, 0.4, 1.8, 0.45, c._hit || (c._hit = {}));
+    this.keepInWorld(c.pos);
+    const g2 = P.groundAt(c.pos.x, c.pos.z, c.pos.y + 1, 0.4);
+    const water = P.waterDepth(c.pos.x, c.pos.z, c.pos.y) > 1.3 && c.pos.y < 0.3;
+    if (c.pos.y <= g2 || water) {
+      const hard = ch.phase === 'free' ? -c.vy : -c.vy - 6;
+      if (!water) c.pos.y = g2;
+      c.vy = 0;
+      this.endChute();
+      if (hard > 12 && !water) c.damage(hard * 9, null, null, false, 'fall');
+      else if (hard > 0) c.vel.multiplyScalar(0.3);
+    }
+    c.animate(dt, 0);
   }
 
   updateFoot(dt) {
@@ -205,11 +288,14 @@ export class Player {
     let wx = fx * my + rx * mx, wz = fz * my + rz * mx;
     const wl = Math.hypot(wx, wz);
     if (wl > 1) { wx /= wl; wz /= wl; }
-    let speed = aiming ? 2.8 : I.key('sprint') ? 7.6 : 4.8;
-    if (c.swimming) speed = I.key('sprint') ? 3.4 : 2.4;
+    const st = 1 + 0.12 * G.skills.get('stamina');
+    let speed = aiming ? 2.8 : I.key('sprint') ? 7.6 * st : 4.8;
+    if (c.swimming) speed = (I.key('sprint') ? 3.4 : 2.4) * st;
     if (G.flags.slowmo) speed *= 0.5;
     c.move(dt, wx * speed, wz * speed, I.pressed('jump'));
     this.keepInWorld(c.pos);
+    // long drops (bridges, towers, cliffs) turn into a skydive
+    if (!c.onGround && !c.swimming && c.vy < -13 && c.pos.y - G.physics.groundAt(c.pos.x, c.pos.z, c.pos.y, 0.4) > 35) { this.startFreefall(c.vel.x, c.vy, c.vel.z); return; }
 
     const firing = I.firing() && !c.swimming;
     const recent = G.time - this.lastFire < 0.8;
@@ -339,15 +425,16 @@ export class Player {
     c.vel.set(0, 0, 0);
     c.setVisible(v.def.cls === 'bike');
     c.aim = false;
-    if (v !== this.lastVehicle) G.stats.carsStolen++;
-    if (this.lastVehicle && this.lastVehicle !== v && !this.lastVehicle.mission) this.lastVehicle.persist = false;
+    if (v !== this.lastVehicle && !v.owned) G.stats.carsStolen++;
+    if (this.lastVehicle && this.lastVehicle !== v && !this.lastVehicle.mission && !this.lastVehicle.owned) this.lastVehicle.persist = false;
     this.lastVehicle = v;
     this.cam.yaw = v.heading;
     this.cam.pitch = -0.2;
     this.enterCooldown = 0.5;
     G.audio.setRadio(v.def.cls !== 'bike');
     G.hud.vehicleName(v.def.name, v.def.cls !== 'bike' && G.audio.stations[G.audio.station].name);
-    if (v.def.cls === 'heli') G.hud.notify('Helicopter: W/S forward/back · A/D turn · Space climb · Shift/Ctrl descend.', 6);
+    if (v.def.cls === 'heli') G.hud.notify('Helicopter: W/S forward/back · A/D turn · Space climb · Shift/Ctrl descend · F bail out (parachute).', 6);
+    if (v.def.cls === 'plane') G.hud.notify('Plane: W/S throttle · A/D bank & steer · Space nose up · Shift nose down · F bail out (parachute). Take off at about 110 km/h.', 8);
     if (v.def.taxi) G.hud.notify('Taxi! Press J to start picking up fares.', 5);
     if (v.isPolice && v.cls !== 'heli') G.hud.notify('Police car! Press J for vigilante missions, N for the siren.', 5);
   }
@@ -355,8 +442,14 @@ export class Player {
   exitVehicle() {
     const v = this.vehicle;
     if (!v) return;
-    if (v.cls === 'heli' && !v.onGround && v.pos.y - G.physics.groundAt(v.pos.x, v.pos.z) > 4) {
-      G.hud.notify('Too high to jump out! Land first (Shift/Ctrl).', 2);
+    const agl = v.pos.y - G.physics.groundAt(v.pos.x, v.pos.z, v.pos.y);
+    if ((v.cls === 'heli' || v.cls === 'plane') && !v.onGround && agl > 4) {
+      if (agl < 20) { G.hud.notify('Too low to bail out! Climb higher or land first.', 2); return; }
+      const vx = v.vel.x * 0.6, vy = Math.min(0, v.vy), vz = v.vel.z * 0.6;
+      this.forceExit(false);
+      const c = this.char;
+      c.pos.set(v.pos.x - Math.cos(v.heading) * (v.def.bodyW || v.def.W) - Math.sin(v.heading) * 2, v.pos.y - 1, v.pos.z + Math.sin(v.heading) * (v.def.bodyW || v.def.W) - Math.cos(v.heading) * 2);
+      this.startFreefall(vx, vy, vz);
       return;
     }
     this.forceExit(true);
@@ -425,7 +518,13 @@ export class Player {
       return;
     }
     const ct = v.ctrl;
-    if (v.cls === 'heli') {
+    if (v.cls === 'plane') {
+      ct.throttle = I.key('forward') ? 1 : Math.max(0, I.gpRT || 0);
+      ct.brake = I.key('back') ? 1 : Math.max(0, I.gpLT || 0);
+      ct.steer = I.moveX();
+      ct.lift = clamp((I.key('jump') ? 1 : 0) - (I.key('descend') || I.key('sprint') ? 1 : 0) + (I.gpMoveY || 0), -1, 1);
+      G.audio.setEngine(true, 0.25 + (v.thr || 0) * 0.75, v.thr || 0, 'plane', v.pos);
+    } else if (v.cls === 'heli') {
       ct.throttle = I.key('forward') ? 1 : Math.max(0, -(I.gpMoveY || 0));
       ct.brake = I.key('back') ? 1 : Math.max(0, I.gpMoveY || 0);
       ct.steer = I.moveX();
@@ -493,12 +592,12 @@ export class Player {
         const back = v.speed < -3 && v.cls !== 'heli';
         const target = back ? v.heading + Math.PI : v.cls === 'heli' ? Math.atan2(v.vel.x, v.vel.z) : v.heading;
         const useT = v.cls === 'heli' && spd < 4 ? v.heading : target;
-        this.cam.yaw = lerpAngle(this.cam.yaw, useT, Math.min(1, dt * 2.4));
-        this.cam.pitch = lerp(this.cam.pitch, v.cls === 'heli' ? -0.3 : -0.18, Math.min(1, dt * 1.5));
+        this.cam.yaw = lerpAngle(this.cam.yaw, useT, Math.min(1, dt * (v.cls === 'plane' ? 3.5 : 2.4)));
+        this.cam.pitch = lerp(this.cam.pitch, v.cls === 'heli' ? -0.3 : v.cls === 'plane' ? -0.16 - v.pitch * 0.6 : -0.18, Math.min(1, dt * 1.5));
       }
       yaw = this.cam.yaw; pitch = this.cam.pitch;
       const big = v.def.L;
-      dist = v.cls === 'heli' ? 17 : big * 1.15 + 3.6;
+      dist = v.cls === 'heli' ? 17 : v.cls === 'plane' ? big * 1.25 + 7 : big * 1.15 + 3.6;
       if (this.cam.mode === 1) dist *= 1.6;
       pivot.set(v.pos.x, v.pos.y + v.def.H * 0.85 + 0.7, v.pos.z);
       fov = 70 + clamp(spd / 70, 0, 1) * 16;
@@ -510,9 +609,10 @@ export class Player {
         if (G.time - this.cam.lastLook > 0.6) { this.cam.yaw = lerpAngle(this.cam.yaw, v.heading, Math.min(1, dt * 8)); this.cam.pitch = lerp(this.cam.pitch, -0.05 - v.pitch, dt * 4); }
       }
     } else {
-      const aiming = G.input.aiming() && !WEAPONS[this.weapon].melee && !c.swimming && !this.dead;
+      const aiming = G.input.aiming() && !WEAPONS[this.weapon].melee && !c.swimming && !this.dead && !this.chute;
       pivot.set(c.pos.x, c.pos.y + (c.swimming ? 0.9 : 1.62), c.pos.z);
-      dist = aiming ? 2.0 : 4.2;
+      dist = aiming ? 2.0 : this.chute ? (this.chute.phase === 'open' ? 9 : 6) : 4.2;
+      if (this.chute && this.chute.phase === 'open') pivot.y += 2;
       shoulder = aiming ? 0.62 : 0.38;
       fov = aiming ? 58 : 70;
       if (this.scoped) { dist = 0.01; shoulder = 0; fov = 14; pivot.y = c.pos.y + 1.72; }

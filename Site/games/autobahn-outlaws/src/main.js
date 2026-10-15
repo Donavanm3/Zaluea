@@ -25,6 +25,11 @@ import { Stunts } from './stunts.js';
 import { RenderPipeline } from './render.js';
 import { LampLights } from './lamps.js';
 import { Events } from './events.js';
+import { Skills } from './skills.js';
+import { WeaponWheel } from './wheel.js';
+import { Garage } from './garage.js';
+import { Properties } from './properties.js';
+import { Phone } from './phone.js';
 import { waterTime } from './world.js';
 import { vehGlassMat, glowMat as vehLightMat } from './models.js';
 
@@ -145,6 +150,12 @@ async function boot() {
   G.vehicles.initSpots();
   G.stunts = new Stunts();
   G.events = new Events();
+  G.skills = new Skills();
+  G.wheel = new WeaponWheel();
+  G.garage = new Garage();
+  G.properties = new Properties();
+  G.phone = new Phone();
+  G.timeScale = 1;
 
   // Headlight for the player's vehicle (always present so shaders never recompile)
   const head = new THREE.SpotLight(0xfff2d8, 0, 70, 0.55, 0.6, 1.2);
@@ -181,8 +192,9 @@ async function boot() {
   G.state = 'menu';
   G.ui.show('menu');
   G.menuT = 0;
-  // debug hook for automated tests
+  // debug hooks for automated tests (simulate without rendering)
   window.__game = G;
+  G.debugStep = (n, dt = 1 / 30) => { for (let i = 0; i < n && G.state === 'play'; i++) { G.input.update(); stepGame(dt); G.fx.update(dt); G.input.endFrame(); } };
   requestAnimationFrame(loop);
 }
 
@@ -209,6 +221,9 @@ function startGame(save) {
     G.pickups.initGnomes(save.gnomes || []);
     G.stats.gnomes = G.pickups.collected.size;
     G.stunts.init(save.stunts || []);
+    G.skills.load(save.skills);
+    G.garage.load(save.garage);
+    G.properties.load(save.properties);
     if (save.weapon && P.inv[save.weapon]) P.switchTo(save.weapon);
     G.hud.notify('Welcome back to Germany.', 3);
   } else {
@@ -216,13 +231,20 @@ function startGame(save) {
     G.missions.init(0, {});
     G.pickups.initGnomes([]);
     G.stunts.init([]);
+    G.skills.load(null);
+    G.garage.load(null);
+    G.properties.load([]);
     G.hud.notify('WASD move · Mouse look · F steal or enter a car · M map · Esc pause', 7);
     setTimeout(() => G.hud.notify('Side job: cars on the export list pay cash at any export dock.', 6), 9000);
   }
   // ground snap
   c.pos.y = G.physics.groundAt(c.pos.x, c.pos.z, c.pos.y + 2);
-  // guarantee a car close to the start
-  {
+  // your personal vehicle waits nearby after loading, otherwise a parked car
+  P.cam.yaw = c.heading;
+  const pe = save && G.garage.byId(G.garage.personal);
+  const ps = pe && !pe.destroyed && G.garage.deliverSpot(12);
+  if (ps && pe.type !== 'libelle') G.garage.spawn(pe, ps.x, ps.y, ps.z, ps.h).ctrl.handbrake = true;
+  else {
     let best = null, bd = 70;
     for (const s of G.vehicles.spots) {
       if (s.kind !== 'parked' || s.veh) continue;
@@ -252,6 +274,7 @@ function loop(now) {
   if (!(dt > 0)) dt = 0.016;
   dt = Math.min(dt, 0.05);
   G.dt = dt;
+  G.realDt = dt;
   G.frame++;
   const I = G.input;
   I.update();
@@ -281,10 +304,16 @@ function loop(now) {
   I.endFrame();
 }
 
-function stepGame(dt) {
+function stepGame(realDt) {
   const I = G.input;
+  G.phone.update();
   if (I.pressed('pause')) { G.ui.pause(); return; }
   if (I.pressed('map')) { G.hud.openMap(true); G.state = 'map'; I.unlock(true); return; }
+  // Slow motion (Fokus / weapon wheel) scales the simulation, not the camera or HUD.
+  G.wheel.update();
+  G.skills.update(realDt);
+  const dt = realDt * G.timeScale;
+  G.dt = dt;
   G.time += dt;
   G.clock = (G.clock + dt / 60) % 24; // one in-game hour per real minute
   G.player.update(dt);
@@ -295,11 +324,13 @@ function stepGame(dt) {
   G.weapons.update(dt);
   G.pickups.update(dt);
   G.stunts.update(dt);
-  G.player.updateCamera(dt);
+  G.player.updateCamera(realDt);
   G.missions.update(dt);
   G.events.update(dt);
+  G.garage.update();
+  G.properties.update();
   G.ui.updateInteractions();
-  G.hud.update(dt);
+  G.hud.update(realDt);
   G.audio.update();
 }
 
@@ -318,7 +349,8 @@ function stepMenu(dt) {
 function commonUpdate(dt) {
   const cam = G.camera;
   const focus = G.state === 'menu' ? cam.position : G.player.pos;
-  G.sky.update(G.clock, cam.position, focus, G.state === 'play' ? dt : dt * 0.2);
+  const sdt = dt * (G.state === 'play' ? G.timeScale || 1 : 1);
+  G.sky.update(G.clock, cam.position, focus, G.state === 'play' ? sdt : dt * 0.2);
   G.sky.updateEnv(G.renderer, dt);
   // night lighting (HDR values above 1 make lamps and windows bloom)
   const night = G.sky.night, W = G.world;
@@ -332,12 +364,15 @@ function commonUpdate(dt) {
   const wet = G.sky.weather;
   for (const m of W.wetMats) m.roughness = lerp(m.userData.wet[0], m.userData.wet[1], wet);
   vehGlassMat.roughness = 0.06 + wet * 0.1;
-  waterTime.value += dt;
+  waterTime.value += sdt;
   // screen grading
   const post = G.post;
   post.exposure = 1 + night * 0.5;
   G.lamps.update(dt, cam.position, night);
   post.hurt = 0; post.grey = 0;
+  const slow = 1 - (G.timeScale || 1);
+  post.grey = slow * 0.55;
+  post.vignette = 0.32 + slow * 0.5;
   if (G.state === 'play' || G.state === 'pause') {
     const P = G.player, hp = P.char.health / P.char.maxHealth;
     if (P.dead || P.busted) post.grey = Math.min(1, P.deadT * 0.6);
@@ -366,9 +401,9 @@ function commonUpdate(dt) {
       m.visible = Math.hypot(bs.center.x - cam.position.x, bs.center.z - cam.position.z) < far + bs.radius + 150;
     }
   }
-  updateRotors(G.world, dt);
+  updateRotors(G.world, sdt);
   if (G.touch) G.touch.update();
-  G.fx.update(dt);
+  G.fx.update(sdt);
   if (G.audio.ctx) {
     G.audio.setListener(cam.position.x, cam.position.y, cam.position.z, G.player ? G.player.cam.yaw : 0);
     if (G.state !== 'play') { G.audio.setEngine(false); G.audio.setSiren(null); G.audio.setHeli(false); }

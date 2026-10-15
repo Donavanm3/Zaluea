@@ -2,20 +2,20 @@
 import { G } from './game.js';
 import { WEAPONS, WEAPON_ORDER } from './weapons.js';
 import { storeSettings } from './save.js';
-import { formatMoney, pick } from './util.js';
+import { formatMoney } from './util.js';
 import { buildVehicleModel } from './models.js';
 import { VEHICLES } from './vehicle.js';
 import { exportPrice } from './events.js';
-
-// Autohaus stock: vehicle id, price. Helicopters are delivered to the nearest helipad.
-const DEALER = [['rennpappe', 1800], ['pendler', 2600], ['kombi', 3400], ['adler', 5200], ['transporter', 4200], ['blitz', 6500], ['falke', 18000], ['libelle', 45000]];
+import { DEALER, MODS, PAINTS, GARAGE_SIZE, moddable } from './garage.js';
+import { STORY } from './missions.js';
 
 const $ = (id) => document.getElementById(id);
 
 const CONTROLS = [
   ['W A S D', 'Move / drive'], ['Mouse', 'Look / aim'], ['Left click', 'Shoot / punch'], ['Right click', 'Aim (hold)'],
   ['Shift', 'Sprint · (heli: descend)'], ['Space', 'Jump · handbrake · (heli: climb)'], ['F', 'Enter / exit / steal vehicle'],
-  ['E', 'Interact · start mission · skip dialogue'], ['R', 'Reload'], ['1–7 / Wheel', 'Select weapon (0 = fists)'], ['H', 'Horn'],
+  ['E', 'Interact · start mission · skip dialogue'], ['R', 'Reload'], ['Tab (hold)', 'Weapon wheel (slows time)'], ['1–7 / Wheel', 'Select weapon (0 = fists)'],
+  ['X', 'Fokus — slow motion special ability'], ['T', 'Phone (↑ ↓ Enter, Backspace back)'], ['H', 'Horn'],
   ['Q', 'Change radio station'], ['C', 'Change vehicle camera'], ['N', 'Police siren (police vehicles)'], ['J', 'Taxi job (taxi) · Vigilante (police car)'],
   ['Ctrl / Z', 'Helicopter descend'], ['M', 'Map (click to set waypoint)'], ['Esc / P', 'Pause'],
 ];
@@ -100,20 +100,21 @@ export class UI {
     const s = G.stats;
     const M = G.missions;
     const done = M.progress + (G.pickups.collected ? G.pickups.collected.size : 0) / 30 + (G.stunts ? G.stunts.done.size / Math.max(1, G.stunts.ramps.length) : 0);
-    const pct = Math.round((done / 12) * 100);
+    const pct = Math.round((done / (STORY.length + 2)) * 100);
     const f = M.freeInfo();
     const next = M.active ? `Current mission: <b>${M.active.def.title}</b>` : f ? f.text.replace(/<span class="sub">.*<\/span>/, '') : '';
     const ex = G.events ? G.events.exportList.map((id) => `${VEHICLES[id].name} (${formatMoney(exportPrice(id))})`).join(' · ') : '';
     $('pause-stats').innerHTML = `
       <div class="progress"><span>Game progress · ${pct}%</span><div class="pbar"><i style="width:${pct}%"></i></div><div class="next">${next}</div>${ex ? `<div class="next small">Export list: ${ex}</div>` : ''}</div>
       <div><span>Money</span><b>${formatMoney(G.money)}</b></div>
-      <div><span>Story missions</span><b>${G.missions.progress} / 10</b></div>
+      <div><span>Story missions</span><b>${G.missions.progress} / ${STORY.length}</b></div>
       <div><span>Garden gnomes</span><b>${G.pickups.collected ? G.pickups.collected.size : 0} / 30</b></div>
       <div><span>Stunt jumps</span><b>${G.stunts ? G.stunts.done.size : 0} / ${G.stunts ? G.stunts.ramps.length : 0}</b></div>
       <div><span>Kills</span><b>${s.kills}</b></div>
       <div><span>Vehicles stolen</span><b>${s.carsStolen}</b></div>
       <div><span>Cars exported</span><b>${s.exports || 0}</b></div>
       <div><span>Driving bonuses</span><b>${formatMoney(s.bonus || 0)}</b></div>
+      <div><span>Businesses owned</span><b>${G.properties.owned.size} / ${G.properties.list.length} · ${formatMoney(G.properties.income)}/day</b></div>
       <div><span>Distance driven</span><b>${(s.distance * 0.1545).toFixed(1)} km</b></div>
       <div><span>Top speed</span><b>${Math.round(s.topSpeed)} km/h</b></div>
       <div><span>Highest wanted level</span><b>${'★'.repeat(s.wantedMax) || '—'}</b></div>
@@ -164,7 +165,7 @@ export class UI {
 
   fillControls() {
     $('controls-list').innerHTML = CONTROLS.map(([k, v]) => `<div class="ctl"><kbd>${k}</kbd><span>${v}</span></div>`).join('') +
-      '<p class="small">Gamepad supported: sticks move/look, RT shoot/accelerate, LT aim/brake, Y enter vehicle, A jump/handbrake, X interact, B reload, LB/RB weapons, Back map, Start pause.</p>';
+      '<p class="small">Gamepad supported: sticks move/look, RT shoot/accelerate, LT aim/brake, Y enter vehicle, A jump/handbrake, X interact, B reload, RB next weapon, LB tap previous / hold weapon wheel, L3+R3 Fokus, D-pad up phone, D-pad right radio, Back map, Start pause.</p>';
   }
 
   // ---------- shops ----------
@@ -186,12 +187,29 @@ export class UI {
     const rows = [];
     if (this.shopType === 'autohaus') {
       $('shop-title').textContent = 'Autohaus';
-      $('shop-sub').textContent = 'Car dealer — brand new, full tank, no questions asked. Delivered to the street outside.';
+      const full = G.garage.full;
+      $('shop-sub').textContent = `Car dealer — brand new, delivered to the street outside and kept in your garage (${G.garage.cars.length}/${GARAGE_SIZE}). Call the mechanic on your phone to get it anywhere.`;
       for (const [id, price] of DEALER) {
         const d = VEHICLES[id];
         const kmh = Math.round(d.maxSpeed * 3.6);
         rows.push(`<div class="shop-row"><div class="sn">${d.cls === 'heli' ? '🚁' : d.cls === 'bike' ? '🏍️' : '🚗'} ${d.name}<small>Top speed ${kmh} km/h · ${d.cls === 'heli' ? 'delivered to the nearest helipad' : `export value ${formatMoney(exportPrice(id))}`}</small></div>
-          <button data-act="buy" data-kind="car" data-item="${id}" ${G.money < price ? 'disabled' : ''}>Buy · ${formatMoney(price)}</button></div>`);
+          <button data-act="buy" data-kind="car" data-item="${id}" ${G.money < price || full ? 'disabled' : ''}>${full ? 'Garage full' : `Buy · ${formatMoney(price)}`}</button></div>`);
+      }
+    } else if (this.shopType === 'werkstatt') {
+      const v = P.vehicle;
+      const e = G.garage.entryFor(v);
+      $('shop-title').textContent = 'Lackiererei & Tuning';
+      $('shop-sub').textContent = `${v.def.name} · condition ${Math.round((v.hp / v.maxHp) * 100)}% · ${e ? 'in your garage' : `not yours yet — any upgrade adds it to your garage (${G.garage.cars.length}/${GARAGE_SIZE})`}`;
+      const dmg = v.hp < v.maxHp - 1 || v.burning > 0;
+      rows.push(`<div class="shop-row"><div class="sn">🔧 Repair & wash<small>${dmg ? 'Fix all damage' : 'Your car is in perfect shape'}</small></div><button data-act="buy" data-kind="repair" data-item="repair" ${!dmg || G.money < 200 ? 'disabled' : ''}>Repair · ${formatMoney(200)}</button></div>`);
+      rows.push(`<div class="shop-row col"><div class="sn">🎨 Respray · ${formatMoney(250)}<small>New paint and plates — loses the police if they didn't see you drive in</small></div><div class="paints">${PAINTS.map(([n, c], i) => `<button data-act="buy" data-kind="paint" data-item="${i}" title="${n}" ${G.money < 250 ? 'disabled' : ''}><span class="swatch" style="background:#${c.toString(16).padStart(6, '0')}"></span>${n}</button>`).join('')}</div></div>`);
+      const m = v.mods || { engine: 0, brakes: 0, armor: 0, turbo: 0 };
+      for (const k in MODS) {
+        const M = MODS[k], lvl = m[k] || 0, max = M.levels.length;
+        const price = M.levels[lvl];
+        const pips = M.levels.map((_, i) => `<i class="${i < lvl ? 'on' : ''}"></i>`).join('');
+        rows.push(`<div class="shop-row"><div class="sn">${k === 'engine' ? '⚙️' : k === 'brakes' ? '🛑' : k === 'armor' ? '🛡️' : '💨'} ${M.name} <span class="pips">${pips}</span><small>${M.desc}</small></div>
+          <button data-act="buy" data-kind="mod" data-item="${k}" ${lvl >= max || G.money < price || (!e && G.garage.full) ? 'disabled' : ''}>${lvl >= max ? 'Installed' : `${max > 1 ? `Level ${lvl + 1}` : 'Install'} · ${formatMoney(price)}`}</button></div>`);
       }
     } else if (this.shopType === 'gunshop') {
       $('shop-title').textContent = 'Waffenladen';
@@ -218,9 +236,38 @@ export class UI {
     else if (kind === 'armor' && G.money >= 600) { G.money -= 600; P.char.armor = 100; G.audio.ui('buy'); }
     else if (kind === 'car') {
       const e = DEALER.find((d) => d[0] === item);
-      if (e && G.money >= e[1] && this.deliverCar(item)) { G.money -= e[1]; G.audio.ui('buy'); }
+      if (e && G.money >= e[1] && !G.garage.full && this.deliverCar(item)) { G.money -= e[1]; G.audio.ui('buy'); }
+    } else if (kind === 'repair' && G.money >= 200 && P.vehicle) {
+      G.money -= 200; P.vehicle.hp = P.vehicle.maxHp; P.vehicle.burning = 0; G.audio.ui('buy');
+    } else if (kind === 'paint' && G.money >= 250 && P.vehicle) {
+      G.money -= 250;
+      this.repaint(P.vehicle, PAINTS[+item][1]);
+      if (G.police.level > 0 && !G.police.seen) { G.police.clear(); G.hud.notify('New paint, new plates — the police lost you!', 4); }
+      G.audio.ui('buy');
+    } else if (kind === 'mod' && P.vehicle) {
+      const v = P.vehicle, M = MODS[item];
+      const e = G.garage.own(v);
+      if (!e) { G.hud.notify('Your garage is full — sell a car from the phone first.', 3); return; }
+      const lvl = v.mods[item] || 0;
+      if (lvl < M.levels.length && G.money >= M.levels[lvl]) {
+        G.money -= M.levels[lvl];
+        v.mods[item] = lvl + 1;
+        if (item === 'armor') { const f = v.hp / v.maxHp; v.maxHp = v.def.hp * (1 + 0.25 * v.mods.armor); v.hp = v.maxHp * f; }
+        G.audio.ui('buy');
+      }
     }
     this.renderShop();
+  }
+
+  repaint(v, col) {
+    v.model.body.geometry.dispose();
+    const nm = buildVehicleModel(v.def, col);
+    v.model.body.geometry = nm.body.geometry;
+    if (nm.glass) nm.glass.geometry.dispose();
+    nm.lights.geometry.dispose();
+    v.color = col;
+    const e = G.garage.entryFor(v);
+    if (e) e.color = col;
   }
 
   // Spawn a bought vehicle on the street in front of the dealer (or on a helipad).
@@ -242,8 +289,9 @@ export class UI {
     }
     const blocking = G.vehicles.list.filter((o) => o !== G.player.vehicle && !o.persist && Math.hypot(o.pos.x - x, o.pos.z - z) < 5);
     for (const o of blocking) { G.traffic.release(o); G.vehicles.remove(o); }
-    const v = G.vehicles.spawn(id, x, y, z, h);
-    v.persist = true; v.owned = true;
+    const e = G.garage.add(id, d.colors[Math.floor(Math.random() * d.colors.length)]);
+    if (!e) return false;
+    G.garage.spawn(e, x, y, z, h);
     G.hud.notify(`Your new ${d.name} is waiting ${d.cls === 'heli' ? 'on the helipad (GPS set)' : 'outside'}. Enjoy!`, 5);
     if (d.cls === 'heli') G.hud.setWaypoint(x, z);
     return true;
@@ -265,7 +313,7 @@ export class UI {
       const inV = !!P.vehicle;
       switch (best.type) {
         case 'gunshop': if (!inV) text = 'Press <b>E</b> — <b>Waffenladen</b> (gun shop)'; break;
-        case 'respray': text = inV ? `Press <b>E</b> — <b>Lackiererei</b>: respray car ${formatMoney(250)}${G.police.level ? ' (loses the cops if unseen)' : ''}` : 'Press <b>E</b> — <b>Autohaus</b>: buy a car · drive in to respray'; break;
+        case 'respray': text = inV ? (moddable(P.vehicle) ? `Press <b>E</b> — <b>Lackiererei & Tuning</b>: paint, engine, brakes, armour, turbo${G.police.level ? ' (a respray loses the cops if unseen)' : ''}` : null) : 'Press <b>E</b> — <b>Autohaus</b>: buy a car · drive in for paint & tuning'; break;
         case 'hospital': if (!inV) text = `Press <b>E</b> — <b>Krankenhaus</b>: full heal ${formatMoney(100)}`; break;
         case 'safehouse': if (!inV) text = 'Press <b>E</b> — <b>Wohnung</b>: save game & sleep 6 hours'; break;
         case 'fuel': text = `Press <b>E</b> — <b>Tankstelle</b>: Currywurst ${formatMoney(15)} (+50 health)${inV ? ' · repair car ' + formatMoney(200) : ''}`; break;
@@ -285,24 +333,10 @@ export class UI {
       case 'gunshop': if (!P.vehicle) this.openShop('gunshop'); break;
       case 'respray':
         if (!P.vehicle) { this.openShop('autohaus'); return; }
-        if (G.money < 250) { G.hud.notify('Not enough money.', 2); return; }
-        G.money -= 250;
-        {
-          const v = P.vehicle;
-          const col = pick([0xd01c1c, 0x1a1a1c, 0xf2f2f2, 0x2a6ad0, 0x2aa04a, 0xf2c200, 0x7b2cbf, 0xc0c4c8]);
-          v.model.body.geometry.dispose();
-          const nm = buildVehicleModel(v.def, col);
-          v.model.body.geometry = nm.body.geometry;
-          if (nm.glass) nm.glass.geometry.dispose();
-          nm.lights.geometry.dispose();
-          v.color = col;
-          v.hp = v.def.hp;
-          v.burning = 0;
-          if (G.police.level > 0 && !G.police.seen) { G.police.clear(); G.hud.notify('New paint, new plates — the police lost you!', 4); }
-          else if (G.police.level > 0) G.hud.notify('The cops saw you drive in! Respray didn\'t help.', 3);
-          else G.hud.notify('Car resprayed and repaired.', 3);
-          G.audio.ui('buy');
-        }
+        if (!moddable(P.vehicle)) return;
+        if (G.police.level > 0 && G.police.seen) { G.hud.notify('The cops are watching you — lose them before you drive in!', 3); return; }
+        P.vehicle.vel.set(0, 0, 0); P.vehicle.speed = 0;
+        this.openShop('werkstatt');
         break;
       case 'hospital':
         if (G.money < 100) { G.hud.notify('Not enough money.', 2); return; }
@@ -319,7 +353,7 @@ export class UI {
       case 'fuel':
         if (P.vehicle) {
           if (G.money < 200) { G.hud.notify('Not enough money.', 2); return; }
-          G.money -= 200; P.vehicle.hp = P.vehicle.def.hp; P.vehicle.burning = 0; G.hud.notify('Vehicle repaired.', 2); G.audio.ui('buy');
+          G.money -= 200; P.vehicle.hp = P.vehicle.maxHp; P.vehicle.burning = 0; G.hud.notify('Vehicle repaired.', 2); G.audio.ui('buy');
         } else {
           if (G.money < 15) return;
           G.money -= 15; c.health = Math.min(c.maxHealth, c.health + 50); G.hud.notify('Mmh, Currywurst mit Pommes! +50 health', 2); G.audio.ui('buy');

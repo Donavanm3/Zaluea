@@ -19,7 +19,11 @@ const BIND = {
   siren: ['KeyN'],
   job: ['KeyJ'],
   descend: ['ControlLeft', 'KeyZ'],
-  phone: ['Tab'],
+  wheel: ['Tab'],
+  phone: ['KeyT'],
+  special: ['KeyX'],
+  back: ['Backspace'],
+  confirm: ['Enter', 'NumpadEnter'],
   w1: ['Digit1'], w2: ['Digit2'], w3: ['Digit3'], w4: ['Digit4'], w5: ['Digit5'], w6: ['Digit6'], w7: ['Digit7'], w8: ['Digit8'], w0: ['Digit0', 'Backquote'],
 };
 
@@ -36,13 +40,15 @@ export class Input {
     this.gp = null;
     this.gpPrev = [];
     this.gpPressed = new Set();
+    this.gpBtn = new Set(); // raw button indices pressed this frame
+    this.extPressed = new Set(); // actions from touch buttons (kept until the end of the next frame)
     this.gpHeld = new Set();
     this.lookX = 0; this.lookY = 0;
     this.usingGamepad = false;
     this.touch = null;
 
     addEventListener('keydown', (e) => {
-      if (e.code === 'Tab' || e.code === 'Space' || e.code.startsWith('Arrow')) {
+      if (e.code === 'Tab' || e.code === 'Space' || e.code === 'Backspace' || e.code.startsWith('Arrow')) {
         if (G.state === 'play') e.preventDefault();
       }
       if (!this.down.has(e.code)) this.pressedSet.add(e.code);
@@ -91,13 +97,14 @@ export class Input {
     if (this.gpHeld.has(action)) return true;
     const k = BIND[action];
     if (!k) return false;
-    for (const c of k) if (this.down.has(c)) return true;
+    const phone = G.phone && G.phone.open;
+    for (const c of k) if (this.down.has(c) && !(phone && (c === 'ArrowUp' || c === 'ArrowDown'))) return true;
     return false;
   }
   pressed(action) {
     const k = BIND[action];
     if (k) for (const c of k) if (this.pressedSet.has(c)) return true;
-    return this.gpPressed.has(action);
+    return this.gpPressed.has(action) || this.extPressed.has(action);
   }
 
   // Poll gamepad and compute per-frame values. Call at start of frame.
@@ -109,8 +116,12 @@ export class Input {
     this.gp = gp;
     if (gp) {
       const b = gp.buttons.map((x) => x.pressed);
-      const map = { 0: 'jump', 1: 'reload', 2: 'interact', 3: 'enter', 4: 'wprev', 5: 'wnext', 9: 'pause', 8: 'map', 10: 'horn', 11: 'camera', 12: 'radio', 13: 'job', 14: 'siren' };
-      for (const i in map) if (b[i] && !this.gpPrev[i]) { this.gpPressed.add(map[i]); this.usingGamepad = true; }
+      // LB (4) is handled by the weapon wheel (tap = previous weapon, hold = wheel).
+      const map = { 0: 'jump', 1: 'reload', 2: 'interact', 3: 'enter', 5: 'wnext', 9: 'pause', 8: 'map', 10: 'horn', 11: 'camera', 12: 'phone', 13: 'job', 14: 'siren', 15: 'radio' };
+      this.gpBtn.clear();
+      for (let i = 0; i < b.length; i++) if (b[i] && !this.gpPrev[i]) { this.gpBtn.add(i); this.usingGamepad = true; }
+      for (const i in map) if (this.gpBtn.has(+i)) this.gpPressed.add(map[i]);
+      if (b[10] && b[11] && (this.gpBtn.has(10) || this.gpBtn.has(11))) this.gpPressed.add('special');
       this.gpPrev = b;
       this.gpHeld.clear();
       if (b[0]) this.gpHeld.add('jump');
@@ -126,6 +137,7 @@ export class Input {
     } else {
       this.gpMoveX = this.gpMoveY = this.gpLookX = this.gpLookY = this.gpLT = this.gpRT = 0;
       this.gpHeld.clear();
+      this.gpBtn.clear();
     }
   }
 
@@ -157,6 +169,7 @@ export class Input {
 
   endFrame() {
     this.pressedSet.clear();
+    this.extPressed.clear();
     this.mousePressed = 0;
     this.wheel = 0;
     this._rtWas = this.gpRT > 0.5;

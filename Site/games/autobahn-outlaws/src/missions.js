@@ -11,6 +11,8 @@ const CONTACTS = {
   svetlana: { name: 'Svetlana', color: '#f2c200', letter: 'S' },
   richter: { name: 'Dr. Richter', color: '#f2c200', letter: 'R' },
   sepp: { name: 'Sepp', color: '#f2c200', letter: 'B' },
+  jens: { name: 'Jens (Pilot)', color: '#f2c200', letter: 'J' },
+  weber: { name: 'Kommissarin Weber', color: '#f2c200', letter: 'W' },
 };
 
 // ---------- helpers ----------
@@ -42,6 +44,22 @@ function cityCenterSpot(id) {
   return roadSpot(c.x + 12, c.z + 12);
 }
 function helipad(city) { return G.world.pads.find((p) => p.type === 'helipad' && p.city === city); }
+function airfield(city) { return G.world.airfields.find((a) => a.city === city) || G.world.airfields[0]; }
+function summit() { return G.world.pads.find((p) => p.type === 'summitcross'); }
+// Remove ambient vehicles parked where a mission vehicle is about to appear.
+function clearSpot(x, z, r = 12) {
+  for (const v of [...G.vehicles.list]) if (!v.persist && v !== G.player.vehicle && Math.hypot(v.pos.x - x, v.pos.z - z) < r) { G.traffic.release(v); G.vehicles.remove(v); }
+}
+function waterSpot(cx, cz, R, taken = []) {
+  const T = G.world.terrain;
+  for (let k = 0; k < 600; k++) {
+    const a = Math.random() * Math.PI * 2, d = Math.random() * R;
+    const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+    if (taken.some((t) => Math.hypot(t.x - x, t.z - z) < 40)) continue;
+    if (T.heightAt(x, z) < -1.6 && T.heightAt(x + 7, z) < -1 && T.heightAt(x - 7, z) < -1 && T.heightAt(x, z + 7) < -1 && T.heightAt(x, z - 7) < -1) return { x, y: 0, z };
+  }
+  return { x: cx, y: 0, z: cz };
+}
 
 const GUARD_LOOK = () => ({ ...randomLook(), shirt: pick([0x1a1a1a, 0x2a2a2a, 0x3a1a1a]), jacket: pick([0x111111, 0x2a2a2a]), pants: 0x1a1a1a, female: false, hairStyle: pick([0, 2]) });
 
@@ -120,7 +138,7 @@ const S = {
       m.gpsTarget = alive ? { x: alive.pos.x, z: alive.pos.z, y: alive.pos.y } : null;
       return left === 0;
     },
-    exit(m) { m.gpsTarget = null; },
+    exit(m) { m.gpsTarget = null; m.timer = null; },
   }),
   loseWanted: (text, level) => ({
     kind: 'loseWanted',
@@ -170,6 +188,26 @@ const S = {
         m.data.ci++;
         if (m.timer !== null && opts.bonus) m.timer += opts.bonus;
         if (m.data.ci >= m.data.total) { m.data.raceTime = G.time - m.data.start; return true; }
+      }
+      return false;
+    },
+    exit(m) { if (m.data.cpMk) G.hud.removeMarker(m.data.cpMk); m.gpsTarget = null; m.timer = null; },
+  }),
+  // Rings in the sky for planes (3D distance check).
+  airCheckpoints: (text, getPoints, opts = {}) => ({
+    kind: 'aircp',
+    text,
+    enter(m) { m.data.cps = getPoints(m); m.data.ci = 0; m.data.total = m.data.cps.length; m.data.cpMk = null; m.timer = opts.time ? opts.time(m) : null; },
+    update(m) {
+      if (opts.veh && G.player.vehicle !== m.data[opts.veh]) { G.hud.objective(`${text}<br><small>Get back in the plane!</small>`); return false; }
+      const cp = m.data.cps[m.data.ci];
+      if (!m.data.cpMk) { m.data.cpMk = G.hud.addMarker(cp.x, cp.y - 4, cp.z, { r: 15, color: 0x40c0ff, checkpoint: true }); m.gpsTarget = cp; }
+      G.hud.objective(`${text} <b>${m.data.ci}/${m.data.total}</b>`);
+      const P = G.player.pos;
+      if (Math.hypot(cp.x - P.x, cp.z - P.z) < 26 && Math.abs(cp.y - P.y) < 24) {
+        G.audio.ui('checkpoint');
+        G.hud.removeMarker(m.data.cpMk); m.data.cpMk = null;
+        if (++m.data.ci >= m.data.total) return true;
       }
       return false;
     },
@@ -373,7 +411,168 @@ export const STORY = [
       S.talk([['svetlana', 'It is over, Luka. Now get out of there — the whole Bundespolizei is coming!']]),
       S.loseWanted('Escape! <b>Lose the police.</b>', 4),
       S.action(() => {
-        G.hud.bigMessage('THE END', '#f2c200', 'Autobahn Outlaws — thanks for playing! Free roam continues.', 8);
+        G.hud.bigMessage('ACT I COMPLETE', '#f2c200', 'Der Graf is gone. But someone is already taking his place…', 7);
+        G.flags.actOne = true;
+      }),
+      S.wait(7),
+      S.call('hans', ['Luka. The Graf had a daughter — Viktoria. She is buying up his empire with Austrian money.', 'My old friend Jens flies cargo out of the airfield north of Hamburg. Go see him. We fight back from the air.']),
+    ],
+  },
+  // ------------------------------ Act II ------------------------------
+  {
+    id: 'flugstunde', title: 'Flugstunde', subtitle: 'Flight Lesson', contact: 'jens', city: 'hamburg', reward: 3000,
+    start: () => { const a = airfield('hamburg'); return { x: a.x - 88, y: a.y + 0.3, z: a.z - 78 }; },
+    steps: () => [
+      S.talk([['jens', 'So you are Hans\'s boy. Ever flown a plane? No? Wunderbar.'], ['jens', 'The Falkner is on the runway. W for throttle, Space to lift the nose once you pass 110. Fly through my rings, then land.']]),
+      S.enterVehicle('Get in the <b>Falkner</b> on the runway.', (m) => {
+        const a = airfield('hamburg');
+        clearSpot(a.x - 92, a.z, 14);
+        const v = m.spawnVehicle('falkner', a.x - 92, a.y + 0.3, a.z, Math.PI / 2, 0xf2f2f2);
+        m.data.plane = v;
+        m.failIf(() => v.dead, 'You crashed the Falkner.');
+        return v;
+      }),
+      S.airCheckpoints('Take off and fly through the <b>rings</b>', () => {
+        const a = airfield('hamburg'), y = a.y;
+        return [[320, 45, 0], [560, 90, 230], [380, 130, 520], [40, 120, 560], [-260, 80, 320], [-380, 45, 40]].map(([dx, dy, dz]) => ({ x: a.x + dx, y: y + dy, z: a.z + dz }));
+      }, { veh: 'plane' }),
+      S.goto('<b>Land</b> on the runway and come to a stop.', () => { const a = airfield('hamburg'); return { x: a.x, y: a.y + 0.3, z: a.z }; }, { radius: 100, veh: 'plane', stop: true }),
+      S.talk([['jens', 'Ha! The wheels are still attached. You are a natural.'], ['jens', 'Come back tomorrow. I have a real job — and it pays better than Hans.']]),
+    ],
+  },
+  {
+    id: 'nachtflug', title: 'Unter dem Radar', subtitle: 'Under the Radar', contact: 'jens', city: 'hamburg', reward: 12000,
+    start: () => { const a = airfield('hamburg'); return { x: a.x - 88, y: a.y + 0.3, z: a.z - 78 }; },
+    steps: () => [
+      S.talk([['jens', 'Viktoria\'s people stole a cargo of Hans\'s money. We are stealing it back.'], ['jens', 'Fly the Kranich to the airfield near München. Stay LOW — below 150 metres — or the Bundeswehr radar sees you.']]),
+      S.enterVehicle('Get in the <b>Kranich</b> cargo plane.', (m) => {
+        const a = airfield('hamburg');
+        clearSpot(a.x - 88, a.z, 20);
+        const v = m.spawnVehicle('kranich', a.x - 88, a.y + 0.3, a.z, Math.PI / 2, 0x5a6470);
+        m.data.plane = v;
+        m.failIf(() => v.dead, 'The Kranich was destroyed with the money on board.');
+        return v;
+      }),
+      S.custom('Fly to <b>München</b> and land. Stay <b>below 150 m</b> above the ground.', (m) => {
+        const a = airfield('muenchen');
+        m.data.target = { x: a.x, y: a.y + 0.3, z: a.z };
+        m.data.mk = G.hud.addMarker(a.x, a.y, a.z, { r: 5, color: 0xf2c200, beam: true });
+        m.gpsTarget = m.data.target;
+        m.data.radar = 0;
+      }, (m, dt) => {
+        const v = G.player.vehicle;
+        if (v !== m.data.plane) { G.hud.objective('Fly to <b>München</b> and land.<br><small>Get back in the Kranich!</small>'); return false; }
+        const agl = v.pos.y - G.physics.groundAt(v.pos.x, v.pos.z, v.pos.y);
+        if (!v.onGround && agl > 150) {
+          m.data.radar += dt;
+          if (!m.data.spotted) G.hud.counter(`RADAR ${Math.ceil(Math.max(0, 6 - m.data.radar))} s — go lower!`);
+          if (m.data.radar > 6 && !m.data.spotted) { m.data.spotted = true; G.hud.counter(null); G.police.setLevel(3); G.hud.notify('Radar contact! Police helicopters are on their way.', 4); }
+        } else { if (!m.data.spotted) G.hud.counter(null); m.data.radar = Math.max(0, m.data.radar - dt * 0.5); }
+        const t = m.data.target;
+        return Math.hypot(t.x - v.pos.x, t.z - v.pos.z) < 130 && v.onGround && Math.abs(v.speed) < 3;
+      }, (m) => { G.hud.removeMarker(m.data.mk); G.hud.counter(null); m.gpsTarget = null; }),
+      S.loseWanted('<b>Lose the police</b> before Sepp\'s men unload the money.'),
+      S.call('jens', ['Smooth landing! Sepp\'s boys are unloading. A cop in Frankfurt wants to meet you — Kommissarin Weber. She is… flexible.']),
+    ],
+  },
+  {
+    id: 'panzerknacker', title: 'Panzerknacker', subtitle: 'The Armoured Truck', contact: 'weber', city: 'frankfurt', reward: 15000,
+    start: () => { const c = CITY_BY_ID.frankfurt; return roadSpot(c.x + c.r * 0.45, c.z + 30); },
+    steps: () => [
+      S.talk([['weber', 'Kaiser. I arrest people like you. Today I am hiring you instead.'], ['weber', 'An armoured truck with Viktoria\'s money is driving through Frankfurt right now. Take it. All of it.']]),
+      S.enterVehicle('Hijack the <b>Geldtransporter</b> — stop it and jump in (<b>F</b>).', (m) => {
+        const P = G.player.pos;
+        let v = G.traffic.spawnNear(P, 70, 160, 'transporter', 0x2f4638);
+        if (!v) { const s = laneSpot(P.x + 60, P.z + 40); v = G.vehicles.spawn('transporter', s.x, s.y, s.z, s.heading, 0x2f4638); }
+        v.persist = true; v.mission = true; v.hp = v.maxHp = v.def.hp * 1.5;
+        m.vehs.push(v);
+        m.data.truck = v;
+        m.failIf(() => v.dead, 'The truck was destroyed — the money burned with it.');
+        return v;
+      }),
+      S.loseWanted('The silent alarm went off! <b>Lose the police.</b>', 3),
+      S.goto('Drive the truck to <b>Weber\'s garage</b>.', () => { const c = CITY_BY_ID.frankfurt; return roadSpot(c.x - c.r * 0.6, c.z - c.r * 0.5); }, { radius: 7, veh: 'truck', stop: true }),
+      S.action((m) => { if (G.player.vehicle === m.data.truck) G.player.exitVehicle(); m.data.truck.locked = true; }),
+      S.talk([['weber', 'Not bad. Half of this goes into my pension. Do not look at me like that.'], ['weber', 'Hans says Viktoria\'s smugglers are back in the Hamburg harbour. Go and sink them.']]),
+    ],
+  },
+  {
+    id: 'elbe', title: 'Elbe in Flammen', subtitle: 'The Elbe on Fire', contact: 'hans', city: 'hamburg', reward: 10000,
+    start: () => hansSpot(),
+    steps: () => [
+      S.talk([['hans', 'Viktoria\'s boats are moored in MY Elbe. Three of them, full of guns.'], ['hans', 'Take my speedboat and this MP. Shoot them until they sink.']]),
+      S.action(() => { G.player.giveWeapon('smg', 240); G.player.switchTo('smg'); }),
+      S.enterVehicle('Get in the <b>speedboat</b>.', (m) => {
+        const h = harborCenter();
+        const w = waterSpot(h.x, h.z, 300);
+        clearSpot(w.x, w.z, 10);
+        m.data.water = [w];
+        return m.spawnVehicle('speedboot', w.x, 0, w.z, 0, 0x1f4fd0);
+      }),
+      S.kill('Destroy the <b>smuggler boats</b> (hold right mouse to aim from the boat)', (m) => {
+        const h = harborCenter();
+        const out = [];
+        for (let i = 0; i < 3; i++) {
+          const w = waterSpot(h.x, h.z, 700, m.data.water);
+          m.data.water.push(w);
+          const v = m.spawnVehicle('speedboot', w.x, 0, w.z, Math.random() * 6, 0x111111);
+          v.hp = v.maxHp = 320; v.locked = true; v.parked = true;
+          m.blip(v, '#ff3030');
+          out.push(v);
+        }
+        return out;
+      }),
+      S.call('hans', ['The whole harbour is watching the fireworks! Sepp called — Viktoria is meeting buyers on the Zugspitze.']),
+    ],
+  },
+  {
+    id: 'gipfel', title: 'Gipfeltreffen', subtitle: 'Summit Meeting', contact: 'sepp', city: 'muenchen', reward: 20000,
+    start: () => { const s = service('safehouse', 'muenchen'); return s ? { x: s.x + 8, y: s.y, z: s.z } : cityCenterSpot('muenchen'); },
+    steps: () => [
+      S.talk([['sepp', 'Viktoria is selling her father\'s guns to Austrians — on top of the Zugspitze!'], ['sepp', 'My helicopter is on the pad outside town. Fly up there and crash the party.']]),
+      S.enterVehicle('Get in Sepp\'s <b>helicopter</b>.', (m) => {
+        const h = helipad('muenchen');
+        clearSpot(h.x, h.z, 10);
+        const v = m.spawnVehicle('libelle', h.x, h.y + 0.4, h.z, 0);
+        m.failIf(() => v.dead && !m.data.jumped, 'The helicopter was destroyed.');
+        return v;
+      }),
+      S.goto('Fly to the <b>Zugspitze</b> summit and land.', () => { const p = summit(); return { x: p.x, y: p.y, z: p.z }; }, { radius: 45 }),
+      S.kill('Take out Viktoria\'s <b>bodyguards</b>', (m) => { const p = summit(); return spawnGuards(m, p, 5, ['rifle', 'smg', 'shotgun'], { rmin: 6, rmax: 20, fight: true }); }),
+      S.talk([['sepp', 'She got away in a cable car! Her lieutenant is waiting in Garmisch.'], ['sepp', 'No time to fly around — JUMP. Your parachute opens with Space.']]),
+      S.action((m) => { m.data.jumped = true; }),
+      S.goto('<b>Jump</b> off the mountain and parachute down to <b>Garmisch</b>.', () => cityCenterSpot('garmisch'), { radius: 40 }),
+      S.kill('Kill <b>Baron Kessler</b> and his guards', (m) => {
+        const s = cityCenterSpot('garmisch');
+        const boss = m.spawnEnemy(s.x + 8, s.z + 6, 'shotgun', { boss: true, look: { ...randomLook(), jacket: 0x2a3a2a, shirt: 0xf2f2f2, female: false } });
+        boss.health = 260;
+        return [boss, ...spawnGuards(m, s, 3, ['pistol', 'smg'], { rmin: 6, rmax: 14 })];
+      }),
+      S.call('svetlana', ['Luka — Viktoria is running. Her private plane is fuelling at the airfield east of Berlin. This ends tonight.']),
+    ],
+  },
+  {
+    id: 'graefin', title: 'Die Gräfin', subtitle: 'Finale: The Countess', contact: 'svetlana', city: 'berlin', reward: 75000,
+    start: () => { const s = service('club', 'berlin'); return { x: s.x, y: s.y, z: s.z - 1 }; },
+    steps: () => [
+      S.talk([['svetlana', 'Viktoria\'s plane leaves in a few minutes. Her whole army is guarding the runway.'], ['svetlana', 'Rifle, Panzerfaust, armour. Stop that plane, Luka. For Hans. For all of us.']]),
+      S.action(() => { const P = G.player; P.giveWeapon('rifle', 240); P.giveWeapon('rpg', 4); P.char.armor = 100; P.char.health = P.char.maxHealth; }),
+      S.goto('Get to the <b>airfield</b> east of Berlin.', () => { const a = airfield('berlin'); return { x: a.x - 40, y: a.y + 0.3, z: a.z - 30 }; }, { radius: 110, time: 'auto' }),
+      S.kill('Destroy <b>Viktoria\'s plane</b> and kill her before it takes off', (m) => {
+        const a = airfield('berlin');
+        clearSpot(a.x - 60, a.z, 20);
+        const plane = m.spawnVehicle('kranich', a.x - 60, a.y + 0.3, a.z, Math.PI / 2, 0x111111);
+        plane.locked = true; plane.hp = plane.maxHp = 1400; plane.parked = true;
+        m.blip(plane, '#ff3030');
+        const boss = m.spawnEnemy(a.x - 70, a.z + 10, 'rifle', { boss: true, look: { ...randomLook(), female: true, jacket: 0x111111, shirt: 0xb0002a, hair: 0xd8c28a } });
+        boss.health = 400; boss.armor = 100;
+        m.timer = 120;
+        return [plane, boss, ...spawnGuards(m, { x: a.x - 50, y: a.y, z: a.z }, 8, ['rifle', 'smg', 'shotgun', 'pistol'], { rmin: 8, rmax: 40, fight: true })];
+      }),
+      S.talk([['svetlana', 'It is over. Really over. Now get out of there — half the Bundespolizei is coming!']]),
+      S.loseWanted('Escape! <b>Lose the police.</b>', 4),
+      S.action(() => {
+        G.hud.bigMessage('THE END', '#f2c200', 'Autobahn Outlaws — thanks for playing! Free roam, businesses and side jobs continue.', 9);
         G.flags.finished = true;
       }),
     ],
@@ -598,9 +797,12 @@ export class Missions {
       if (this.taxi) { this.taxi = null; G.hud.objective(''); }
       return;
     }
-    if (G.player.dead || G.player.busted) G.hud.notify('Mission failed: ' + (reason || ''), 5);
-    else G.hud.bigMessage('MISSION FAILED', '#c0392b', reason || '', 4);
+    const down = G.player.dead || G.player.busted;
+    if (down) G.hud.notify('Mission failed: ' + (reason || ''), 5);
+    else G.hud.bigMessage('MISSION FAILED', '#c0392b', `${reason || ''} · Press E to retry`, 4);
     G.audio.ui('fail');
+    // offer a quick retry (after the respawn if you died or were arrested)
+    this.retry = { def: this.active.def, isRace: this.active.isRace, until: G.time + (down ? 26 : 16) };
     this.cleanup(true);
     this.placeStartMarker();
   }
@@ -617,6 +819,31 @@ export class Missions {
     G.hud.counter(null);
     this.active = null;
     this.cooldown = 3;
+  }
+
+  // Teleport back to the mission start (or race start) and play it again.
+  retryMission() {
+    const R = this.retry;
+    this.retry = null;
+    if (!R) return;
+    const P = G.player;
+    G.police.clear();
+    let s;
+    if (R.isRace) {
+      const rm = this.raceMarkers.find((r) => r.race.id === R.def.id);
+      s = rm ? { x: rm.x, y: rm.y, z: rm.z } : null;
+    } else s = R.def.start();
+    if (s) {
+      if (P.vehicle && R.isRace) { const v = P.vehicle; v.pos.set(s.x, s.y + 0.3, s.z); v.vel.set(0, 0, 0); v.speed = 0; }
+      else {
+        if (P.vehicle) P.forceExit(false);
+        P.char.pos.set(s.x, G.physics.groundAt(s.x, s.z, s.y + 2), s.z);
+        P.char.vel.set(0, 0, 0);
+      }
+    }
+    G.hud.clearBig();
+    if (!R.isRace && this.startMarker && this.startMarker.def === R.def) { G.hud.removeMarker(this.startMarker.mk); this.startMarker = null; }
+    this.start(R.def, R.isRace);
   }
 
   // --------- vigilante side job (police vehicles) ---------
@@ -789,6 +1016,11 @@ export class Missions {
     if (!this.active) {
       if (P.dead || P.busted) return;
       let prompt = null;
+      const R = this.retry;
+      if (R && G.time < R.until) {
+        prompt = `Press <b>E</b> to retry <b>${R.def.title}</b> <small>(${Math.ceil(R.until - G.time)} s)</small>`;
+        if (G.input.pressed('interact')) { this.retryMission(); G.hud.missionPrompt = null; return; }
+      } else this.retry = null;
       if (this.startMarker && this.cooldown <= 0) {
         const s = this.startMarker;
         if (Math.hypot(s.x - P.pos.x, s.z - P.pos.z) < (P.vehicle ? 5 : 2.5)) {

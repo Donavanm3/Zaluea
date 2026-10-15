@@ -83,6 +83,7 @@ export class RenderPipeline {
     this.exposure = 1;
     this.hurt = 0;
     this.grey = 0;
+    this.vignette = 0.32;
     this.tint = new THREE.Color(1, 1, 1);
     if (!this.enabled) return;
     const samples = Math.min(4, renderer.capabilities.maxSamples || 0);
@@ -153,6 +154,7 @@ export class RenderPipeline {
     u.exposure.value = this.exposure;
     u.hurt.value = this.hurt;
     u.grey.value = this.grey;
+    u.vignette.value = this.vignette;
     this.blit(this.mComp, null);
     r.autoClear = auto;
   }

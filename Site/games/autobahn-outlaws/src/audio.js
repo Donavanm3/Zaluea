@@ -259,6 +259,7 @@ export class AudioSys {
     if (e.kind === 'trabbi') { base = 55; span = 150; vol = 0.08; }
     if (e.kind === 'bike') { base = 50; span = 220; vol = 0.1; }
     if (e.kind === 'boat') { base = 28; span = 90; vol = 0.12; }
+    if (e.kind === 'plane') { base = 36; span = 60; vol = 0.15; }
     const fr = base + rpm * span;
     e.o1.frequency.setTargetAtTime(fr, t, 0.05);
     e.o2.frequency.setTargetAtTime(fr * 0.5, t, 0.05);

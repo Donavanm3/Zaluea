@@ -43,6 +43,11 @@ export class VehicleManager {
     for (const p of W.pads) {
       if (p.type === 'helipad') this.spots.push({ x: p.x, z: p.z, y: p.y + 0.4, heading: 0, kind: p.city === 'berlin' ? 'polizeiheli' : 'libelle' });
     }
+    // planes: a sport plane lined up on each runway, cargo planes on the bigger aprons
+    for (const a of W.airfields || []) {
+      this.spots.push({ x: a.x - 92, z: a.z, y: a.y + 0.3, heading: Math.PI / 2, kind: 'falkner', airfield: a.city });
+      if (a.city === 'hamburg' || a.city === 'muenchen') this.spots.push({ x: a.x - 75, z: a.z - 60, y: a.y + 0.28, heading: Math.PI / 2, kind: 'kranich', airfield: a.city });
+    }
     // boats near water in coastal / river cities and big lakes
     const T = W.terrain;
     const tryWater = (cx, cz, R) => {

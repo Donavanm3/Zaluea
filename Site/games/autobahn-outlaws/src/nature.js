@@ -50,6 +50,7 @@ export function buildNature(world, quality) {
       if (cityM > 0.01) continue;
       const roadD = T.sample(T.roadD, jx, jz);
       if (roadD < 16) continue;
+      if (nearAirfield(world, jx, jz, 25)) continue;
       let p = f * 0.9 * density;
       if (f < 0.1) p = 0.012 * density; // lone trees and hedgerows
       if (R() > p) continue;
@@ -99,6 +100,11 @@ export function buildNature(world, quality) {
   buildPOIs(world);
 }
 
+function nearAirfield(world, x, z, extra) {
+  for (const a of world.airfields || []) if (Math.hypot(x - a.x, z - a.z) < a.r + extra) return true;
+  return false;
+}
+
 function farFromCities(x, z, extra) {
   for (const c of CITIES) if (Math.hypot(x - c.x, z - c.z) < c.r + extra) return false;
   return true;
@@ -117,7 +123,7 @@ function buildVillages(world, rng) {
     const x = GRID.X0 + 400 + R() * (GRID.X1 - GRID.X0 - 800);
     const z = GRID.Z0 + 400 + R() * (GRID.Z1 - GRID.Z0 - 800);
     if (!insideGermany(x, z)) continue;
-    if (!farFromCities(x, z, 180)) continue;
+    if (!farFromCities(x, z, 180) || nearAirfield(world, x, z, 160)) continue;
     const rd = T.sample(T.roadD, x, z);
     if (rd < 70 || rd > 400) continue;
     if (T.sample(T.forest, x, z) > 0.3 || T.nearest(T.water, x, z)) continue;
@@ -202,7 +208,7 @@ function buildWindParks(world, rng) {
     const x = GRID.X0 + R() * (GRID.X1 - GRID.X0);
     const z = GRID.Z0 + R() * (GRID.Z1 - GRID.Z0);
     const { lat } = toLonLat(x, z);
-    if (lat < 51.6 || !insideGermany(x, z) || !farFromCities(x, z, 220)) continue;
+    if (lat < 51.6 || !insideGermany(x, z) || !farFromCities(x, z, 220) || nearAirfield(world, x, z, 320)) continue;
     if (T.sample(T.roadD, x, z) < 80 || T.sample(T.forest, x, z) > 0.2 || T.nearest(T.water, x, z)) continue;
     parks++;
     const n = 4 + Math.floor(R() * 5);
@@ -322,7 +328,41 @@ function buildPOIs(world) {
     B.box(4, 0.05, 1, pad.x, pad.y + 0.43, pad.z, 0xffffff);
     P.addBox(pad.x - 10, pad.z - 10, pad.x + 10, pad.z + 10, pad.y - 3, pad.y + 0.4, { slab: true });
   }
+  for (const a of world.airfields || []) buildAirfield(world, B, P, a);
   const mesh = new THREE.Mesh(B.build(), world.cityMats.miscMat);
   mesh.castShadow = mesh.receiveShadow = true;
   world.scene.add(mesh);
+}
+
+// Runway (east-west), taxiway, apron, hangar, control tower and windsock.
+function buildAirfield(world, B, P, a) {
+  const { x, z, y } = a;
+  B.box(226, 0.3, 24, x, y + 0.15, z, 0x3a3b3f);
+  for (let s = -100; s <= 100; s += 12) B.box(6, 0.04, 0.5, x + s, y + 0.32, z, 0xf2f2f2);
+  for (const end of [-1, 1]) {
+    for (let k = -4; k <= 4; k++) if (k) B.box(12, 0.04, 1.1, x + end * 104, y + 0.32, z + k * 2.3, 0xf2f2f2);
+    B.box(0.8, 0.04, 22, x + end * 96, y + 0.32, z, 0xf2f2f2);
+  }
+  for (let s = -110; s <= 110; s += 22) for (const side of [-1, 1]) B.box(0.4, 0.45, 0.4, x + s, y + 0.22, z + side * 12.8, 0xf2c200);
+  B.box(14, 0.28, 30, x - 60, y + 0.14, z - 26, 0x48494d);
+  B.box(76, 0.28, 36, x - 60, y + 0.14, z - 58, 0x48494d);
+  P.addBox(x - 113, z - 12, x + 113, z + 12, y - 2, y + 0.3, { slab: true });
+  P.addBox(x - 98, z - 76, x - 22, z - 40, y - 2, y + 0.28, { slab: true });
+  P.addBox(x - 67, z - 41, x - 53, z - 11, y - 2, y + 0.28, { slab: true });
+  // hangar with door facing the apron
+  const hx = x - 52, hz = z - 92;
+  B.box(36, 11, 22, hx, y + 5.5, hz, 0xd6dbe0);
+  B.box(36.6, 1.2, 22.6, hx, y + 11.4, hz, 0x8a939c);
+  B.box(28, 9, 0.3, hx, y + 4.5, hz + 11.1, 0x2f3338);
+  P.addBox(hx - 18, hz - 11, hx + 18, hz + 11, y - 1, y + 12, { building: true });
+  // control tower
+  const tx = x - 98, tz = z - 92;
+  B.box(4, 16, 4, tx, y + 8, tz, 0xe6e6e0);
+  B.box(7, 3, 7, tx, y + 17.5, tz, 0x2c4a63);
+  B.box(7.8, 0.6, 7.8, tx, y + 19.3, tz, 0xd0d0d0);
+  P.addBox(tx - 2, tz - 2, tx + 2, tz + 2, y - 1, y + 19.5, { building: true });
+  // windsock
+  B.box(0.2, 6, 0.2, x + 70, y + 3, z - 24, 0x999999);
+  B.add(new THREE.ConeGeometry(0.6, 3, 8, 1, true), 0xff7a1a, x + 71.5, y + 5.8, z - 24, 0, 0, Math.PI / 2);
+  world.landmarkSpots.push({ type: 'airfield', city: a.city, x, z, y });
 }

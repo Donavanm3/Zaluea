@@ -18,20 +18,35 @@ generated procedurally at load time. There are no external asset files, so the g
 - **Landmarks**: Brandenburger Tor, Fernsehturm, Reichstag, Kölner Dom, Elbphilharmonie and Hamburg's container
   harbour, Frankfurt's skyline, Munich's Frauenkirche and stadium, Dresden's Frauenkirche, the Völkerschlachtdenkmal,
   Nürnberg's Kaiserburg, Schloss Neuschwanstein, the Brocken and the Zugspitze summit cross.
-- **Vehicles**: 16 types — hatchbacks, saloons, estates, a sports car, the "Rennpappe 601", taxis, vans, lorries,
-  city buses, motorbikes, police cars, SEK vans, ambulances, speedboats and helicopters. Arcade physics with drifting,
-  jumps, crash damage, smoke, fire and explosions.
+- **Vehicles**: 18 types — hatchbacks, saloons, estates, a sports car, the "Rennpappe 601", taxis, vans, lorries,
+  city buses, motorbikes, police cars, SEK vans, ambulances, speedboats, helicopters, a sport plane and a cargo plane.
+  Arcade physics with drifting, jumps, crash damage, smoke, fire and explosions.
+- **Flying**: four airfields (near Hamburg, Berlin, München and Köln) with runways, hangars and towers. Take off,
+  bank through the sky and bail out with a **parachute** — which also works for base jumps off towers and mountains.
 - **Weapons**: fists, pistol, SMG, shotgun, assault rifle, sniper rifle with scope, Panzerfaust rocket launcher and
   grenades, with hit-scan ballistics, headshots, tracers and muzzle flashes. Drive-by shooting from vehicles.
 - **Living world**: pedestrians walking city sidewalks and villages who flee, cower or fight back; AI traffic that
   follows lanes, turns at junctions, brakes and honks; day/night cycle with lit windows and street lamps; rain.
-- **Police & wanted system**: 1–5 stars, patrol cars, SEK vans and helicopters, cops who try to arrest you at low
-  levels and shoot at higher ones, line-of-sight based evasion, BUSTED and WASTED.
-- **Story**: 10 missions across Hamburg, Bremen, Hannover, Berlin, Frankfurt, München and Neuschwanstein. The
+- **Police & wanted system**: 1–5 stars, patrol cars, SEK vans and helicopters (with searchlights at night),
+  roadblocks from three stars, cops who try to arrest you at low levels and shoot at higher ones, line-of-sight
+  based evasion, BUSTED and WASTED.
+- **Story**: 16 missions in two acts across Hamburg, Bremen, Hannover, Berlin, Frankfurt, München, Neuschwanstein,
+  the Zugspitze and the skies over Germany — flight lessons, a low-level smuggling flight, an armoured-truck heist,
+  a boat battle on the Elbe and a parachute jump off the Zugspitze. Failed missions can be retried instantly. The
   objective card and a yellow GPS route always point to the next thing to do.
 - **Side jobs & events**: car export contracts (steal a car from the export list and deliver it to a dock),
-  cash-truck robberies, taxi fares, vigilante missions in police cars, four Autobahn races with best times,
-  stunt-jump ramps beside the Autobahn and 30 hidden garden gnomes (Gartenzwerge).
+  cash-truck robberies, purse snatchers and armed robberies at petrol stations to stop, taxi fares, vigilante
+  missions in police cars, four Autobahn races with best times, stunt-jump ramps beside the Autobahn and 30 hidden
+  garden gnomes (Gartenzwerge).
+- **Phone** (T): Taxi Blitz fast travel, the mechanic who delivers your cars, a lawyer who makes the police forget
+  you, story contacts, map, garage, businesses, skills and quick save.
+- **Weapon wheel & Fokus**: hold Tab for a radial weapon wheel (time slows down); press X for *Fokus*, a slow-motion
+  special ability that recharges with kills, stunts and driving bonuses.
+- **Skills**: driving, shooting, stamina and flying improve as you play and make you grip, aim, run and fly better.
+- **Garage & tuning**: up to six personal vehicles saved with the game; the Lackiererei now does paint, engine,
+  brakes, armour and turbo upgrades.
+- **Businesses**: ten properties for sale around Germany — from a Späti in Kreuzberg to a Frankfurt exchange
+  office — that pay out every morning at 06:00.
 - **Driving bonuses**: cash for near misses, drifts, big air and flat-out Autobahn runs, with a combo multiplier.
 - **Shops & services**: Waffenladen (gun shop), Autohaus (buy cars and a helicopter), Lackiererei (respray to lose
   the police), Krankenhaus, Tankstelle (Currywurst & repairs), safehouses for saving.
@@ -52,11 +67,16 @@ generated procedurally at load time. There are no external asset files, so the g
 | Aim | Right click (hold) | LT |
 | Sprint / heli descend | Shift | L3 (sprint), B (heli descend) |
 | Jump / handbrake / heli climb | Space | A |
-| Enter, exit, steal vehicle | F | Y |
-| Interact, start mission, skip dialogue | E | X |
+| Enter, exit, steal vehicle · bail out of aircraft | F | Y |
+| Interact, start mission, retry, skip dialogue | E | X |
 | Reload | R | B |
-| Select weapon | 1–7, mouse wheel (0 = fists) | LB / RB |
-| Horn / radio / camera | H / Q / C | L3 / D-pad up / R3 |
+| Weapon wheel (slows time) | Tab (hold) | LB (hold) |
+| Select weapon | 1–7, mouse wheel (0 = fists) | LB tap / RB |
+| Fokus (slow motion) | X | L3 + R3 |
+| Phone (↑ ↓ Enter, Backspace back) | T | D-pad up |
+| Plane: throttle / bank / nose up / nose down | W S / A D / Space / Shift | RT LT / left stick |
+| Open parachute | Space or F | A or Y |
+| Horn / radio / camera | H / Q / C | L3 / D-pad right / R3 |
 | Police siren (police vehicles) | N | D-pad left |
 | Taxi job (taxi) / vigilante (police car) | J | D-pad down |
 | Map | M | Back |
@@ -118,7 +138,9 @@ Mac's Python 3, and shows an alert if neither is available.
 - Saves and settings are stored in the browser's `localStorage`.
 - Source layout: `src/geo.js` (Germany data), `terrain.js`, `roads.js`, `city.js`, `landmarks.js`, `nature.js`
   (world), `vehicle.js`, `vehicles.js`, `traffic.js`, `character.js`, `peds.js`, `police.js`, `weapons.js`,
-  `player.js` (gameplay), `missions.js`, `events.js` (side jobs, driving bonuses), `stunts.js`, `pickups.js`,
+  `player.js` (gameplay, parachute), `missions.js`, `events.js` (side jobs, street crime, driving bonuses),
+  `phone.js`, `wheel.js` (weapon wheel), `skills.js` (skills, Fokus slow motion), `garage.js` (personal vehicles,
+  tuning), `properties.js` (businesses), `stunts.js`, `pickups.js`,
   `hud.js`, `ui.js`, `touch.js`, `save.js`, `audio.js`, `sky.js` (sky, clouds, sun, environment map),
   `render.js` (HDR post-processing), `lamps.js` (street-lamp lights), `effects.js`, `main.js`.
 - Touch devices get an on-screen joystick, drag-to-look and action buttons automatically.

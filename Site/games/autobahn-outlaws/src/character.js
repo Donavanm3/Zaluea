@@ -230,6 +230,19 @@ export class Character {
     }
     this.root.rotation.x = 0;
     this.root.rotation.z = 0;
+    if (this.pose === 'freefall') {
+      this.root.rotation.x = 1.25;
+      m.armL.rotation.set(-1.6, 0, 1.1); m.armR.rotation.set(-1.6, 0, -1.1);
+      m.legL.rotation.x = 0.35; m.legR.rotation.x = 0.35; m.body.position.y = 0;
+      this.sync();
+      return;
+    }
+    if (this.pose === 'chute') {
+      m.armL.rotation.set(-2.7, 0, 0.35); m.armR.rotation.set(-2.7, 0, -0.35);
+      m.legL.rotation.x = 0.15; m.legR.rotation.x = -0.1; m.body.position.y = 0;
+      this.sync();
+      return;
+    }
     if (o.seated) {
       m.legL.rotation.x = -1.35; m.legR.rotation.x = -1.35;
       m.armL.rotation.set(-1.1, -0.2, 0); m.armR.rotation.set(-1.1, 0.2, 0);

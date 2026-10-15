@@ -71,7 +71,8 @@ export class Weapons {
     }
     G.fx.muzzle(from.x, from.y, from.z, dir.x, dir.y, dir.z);
     const pellets = w.pellets || 1;
-    const spread = (w.spread || 0) + (opts.extraSpread || 0);
+    // Shooting skill tightens the player's spread by up to 45%.
+    const spread = ((w.spread || 0) + (opts.extraSpread || 0)) * (isPlayer && G.skills ? 1 - 0.45 * G.skills.get('shooting') : 1);
     for (let p = 0; p < pellets; p++) {
       _d.copy(dir);
       if (spread > 0) {
@@ -87,7 +88,11 @@ export class Weapons {
         const killed = c.damage(dmg, shooter, _d, r.target.head, 'bullet');
         G.fx.impact(r.x, r.y, r.z, -_d.x, -_d.y, -_d.z, 'blood');
         if (c.onShot) c.onShot(shooter);
-        if (isPlayer) { G.police.onPlayerHit(c, killed); G.hud.hitMarker(killed); }
+        if (isPlayer) {
+          G.police.onPlayerHit(c, killed);
+          G.hud.hitMarker(killed);
+          if (G.skills && (p === 0 || pellets === 1)) { G.skills.add('shooting', r.target.head ? 0.3 : 0.12); G.skills.charge(r.target.head ? 3 : 1); }
+        }
       } else if (r.target && r.target.kind === 'veh') {
         const v = r.target.v;
         v.damage(dmg * 0.65, shooter, 'bullet');

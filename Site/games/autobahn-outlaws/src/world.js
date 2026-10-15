@@ -32,6 +32,12 @@ export async function buildWorld(scene, quality, progress = () => {}) {
       break;
     }
   }
+  // Airfields for planes: long flat strips away from roads, rivers and towns.
+  world.airfields = [];
+  for (const id of ['hamburg', 'berlin', 'muenchen', 'koeln']) {
+    const a = findAirfield(roads, CITY_BY_ID[id], pads);
+    if (a) { pads.push(a); world.airfields.push(a); }
+  }
   for (const p of pads) if (p.y === undefined) p.y = Math.max(1.5, naturalHeight(p.x, p.z) + (p.type === 'neuschwanstein' ? 8 : 0.5));
 
   progress(0.12, 'Shaping the terrain…');
@@ -86,6 +92,26 @@ export async function buildWorld(scene, quality, progress = () => {}) {
   world.nightMats = [mats.wallMat, mats.glassMat];
   world.wetMats = [...roads.wetMats];
   return world;
+}
+
+export const AIR_R = 112; // flattened radius around an airfield; the runway runs east-west
+const RUNWAY_PROBES = [[0, 0], [-130, 0], [130, 0], [0, -70], [0, 70], [-120, -60], [120, 60], [-120, 60], [120, -60]];
+function findAirfield(roads, c, pads) {
+  for (const dist of [c.r + 340, c.r + 480, c.r + 650, c.r + 850, c.r + 1050]) {
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2;
+      const x = c.x + Math.cos(a) * dist, z = c.z + Math.sin(a) * dist;
+      if (RUNWAY_PROBES.some(([ox, oz]) => !insideGermany(x + ox, z + oz) || isWaterPlan(x + ox, z + oz, 40))) continue;
+      if (roads.nearestOnRoad(x, z, AIR_R + 50) || roads.nearestOnRoad(x - 130, z, 60) || roads.nearestOnRoad(x + 130, z, 60)) continue;
+      if (CITIES.some((q) => Math.hypot(q.x - x, q.z - z) < q.r + AIR_R + 120)) continue;
+      if (pads.some((p) => Math.hypot(p.x - x, p.z - z) < (p.r || 10) + AIR_R + 80)) continue;
+      const hs = RUNWAY_PROBES.slice(0, 5).map(([ox, oz]) => naturalHeight(x + ox, z + oz));
+      const lo = Math.min(...hs), hi = Math.max(...hs);
+      if (hi - lo > 22 || lo < 2 || hi > 180) continue;
+      return { type: 'airfield', x, z, r: AIR_R, pad: true, city: c.id, y: hs.reduce((s, h) => s + h, 0) / hs.length + 0.3 };
+    }
+  }
+  return null;
 }
 
 // Reflective water with two scrolling ripple layers.

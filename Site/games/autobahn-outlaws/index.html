@@ -33,7 +33,7 @@
     <div id="hud-centertop"><div id="hud-timer"></div><div id="hud-counter"></div></div>
     <div id="hud-minimapwrap">
       <div id="hud-mapcard"><canvas id="minimap" width="440" height="440"></canvas><div id="hud-gpsdist"></div></div>
-      <div id="hud-bars"><div class="bar hp"><div id="hud-health"></div></div><div class="bar ar"><div id="hud-armor"></div></div></div>
+      <div id="hud-bars"><div class="bar hp"><div id="hud-health"></div></div><div class="bar ar"><div id="hud-armor"></div></div><div class="bar sp" id="hud-spbar"><div id="hud-special"></div></div></div>
     </div>
     <div id="hud-area"><div id="hud-area-name"></div><div id="hud-area-sub"></div></div>
     <div id="hud-veh"></div>
@@ -52,8 +52,17 @@
     <div id="hud-scope"></div>
     <div id="hud-big"><div id="hud-big-title"></div><div id="hud-big-sub"></div></div>
     <div id="hud-click">Click to take control</div>
+    <div id="wheel"><div class="wh-ring"></div><div class="wh-center"><b id="wh-name"></b><span id="wh-ammo"></span></div></div>
     <div id="hud-fps"></div>
   </div>
+
+  <div id="phone">
+    <div class="ph-status"><span id="ph-clock">09:00</span><span>Telekomm 5G</span></div>
+    <div class="ph-head"><button id="ph-back" aria-label="Back">‹</button><b id="ph-title">Telekomm</b></div>
+    <div id="ph-body"></div>
+    <div class="ph-hint">↑ ↓ choose · Enter select · Backspace back · T close</div>
+  </div>
+  <div id="fade"></div>
 
   <div id="mapwrap"><canvas id="bigmap"></canvas><button id="map-close" data-act="closemap">✕ Close map</button></div>
 
@@ -83,7 +92,7 @@
       </div>
       <p class="small" id="menu-note">Best with keyboard &amp; mouse or a gamepad. Click the game to capture the mouse.</p>
     </div>
-    <div class="menu-chips"><span>34 cities</span><span>46 Autobahn links</span><span>10 story missions</span><span>Races · Stunts · Side jobs</span></div>
+    <div class="menu-chips"><span>34 cities</span><span>46 Autobahn links</span><span>16 story missions</span><span>Planes · Parachutes</span><span>Businesses · Tuning · Side jobs</span></div>
   </div>
 
   <div id="scr-intro" class="screen">
@@ -94,7 +103,8 @@
       <ul class="intro-list">
         <li><b>Follow the yellow GPS</b> to the next story mission and press <kbd>E</kbd> in the marker.</li>
         <li><b>Earn money</b> with side jobs: car export contracts, cash trucks, taxi fares, races and stunt jumps.</li>
-        <li><b>Spend it</b> at the Waffenladen (guns) and the Autohaus (cars). Save at your Wohnung.</li>
+        <li><b>Spend it</b> on guns, cars, tuning and businesses that pay you every morning. Save at your Wohnung.</li>
+        <li>Press <kbd>T</kbd> for your <b>phone</b> (taxi, mechanic, lawyer), hold <kbd>Tab</kbd> for the weapon wheel and press <kbd>X</kbd> for <b>Fokus</b> slow motion.</li>
       </ul>
       <div class="btns row"><button data-act="intro-go" class="primary">Let's go</button><button data-act="back" class="ghost">Back</button></div>
     </div>

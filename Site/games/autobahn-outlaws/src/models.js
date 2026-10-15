@@ -293,6 +293,59 @@ export function buildVehicleModel(def, color) {
     b.box(0.5, 0.9, 0.4, 0, 0.5, -3.3, 0x222222);
     glow.box(0.12, 0.12, 0.12, W / 2 - 0.1, 1.0, 2.5, 0x20ff40);
     glow.box(0.12, 0.12, 0.12, -W / 2 + 0.1, 1.0, 2.5, 0xff2020);
+  } else if (def.shape === 'plane') {
+    // high-wing light aircraft
+    b.box(1.2, 1.25, 5.6, 0, 1.38, 0.2, color);
+    b.box(0.7, 0.75, 2.4, 0, 1.55, -3.6, color);
+    b.box(1.1, 1.0, 0.9, 0, 1.35, 3.25, 0xe8e8e8);
+    b.add(new THREE.ConeGeometry(0.28, 0.5, 10), dark, 0, 1.35, 3.95, Math.PI / 2, 0, 0);
+    b.box(1.16, 0.62, 1.5, 0, 2.08, 1.35, glass);
+    b.box(1.22, 0.55, 0.9, 0, 1.8, -0.3, glass);
+    b.box(10.4, 0.14, 1.5, 0, 2.48, 0.8, color);
+    b.box(10.42, 0.15, 0.3, 0, 2.48, 0.15, 0xd01c1c);
+    b.box(0.08, 1.1, 0.08, 1.6, 1.95, 0.9, chrome, 0, 0, 0.9); b.box(0.08, 1.1, 0.08, -1.6, 1.95, 0.9, chrome, 0, 0, -0.9);
+    b.box(3.6, 0.1, 0.9, 0, 1.7, -4.5, color);
+    b.box(0.12, 1.4, 1.1, 0, 2.4, -4.55, color);
+    b.box(0.13, 0.5, 0.6, 0, 2.95, -4.75, 0xd01c1c);
+    b.box(0.1, 0.65, 0.1, 0.95, 0.6, 0.55, dark); b.box(0.1, 0.65, 0.1, -0.95, 0.6, 0.55, dark); b.box(0.1, 0.6, 0.1, 0, 0.65, 2.75, dark);
+    addWheel(1.0, 0.55, 0.3, 0.16, false); addWheel(-1.0, 0.55, 0.3, 0.16, false); addWheel(0, 2.75, 0.24, 0.12, true);
+    glow.box(0.15, 0.1, 0.25, 5.15, 2.48, 0.8, 0x20ff40); glow.box(0.15, 0.1, 0.25, -5.15, 2.48, 0.8, 0xff2020);
+    glow.box(0.12, 0.12, 0.12, 0, 3.15, -4.8, 0xffffff);
+    const pb = new Builder();
+    pb.box(0.14, 2.0, 0.06, 0, 0, 0, 0x1a1a1a);
+    const prop = new THREE.Mesh(pb.build(), vehMat);
+    prop.position.set(0, 1.35, 3.85);
+    group.add(prop);
+    extras.props = [prop];
+  } else if (def.shape === 'cargo') {
+    // twin-turboprop transport with a T-tail
+    b.box(3.0, 3.0, 13.5, 0, 2.6, 0, color);
+    b.box(2.5, 2.3, 2.2, 0, 2.5, 7.6, color);
+    b.box(2.3, 0.75, 1.3, 0, 3.55, 7.9, glass);
+    b.box(2.0, 2.2, 2.4, 0, 3.0, -7.6, color, 0, -0.25);
+    b.box(22, 0.32, 3.2, 0, 4.25, 1.0, color);
+    for (const sx of [-4.6, 4.6]) {
+      b.box(1.0, 1.0, 3.0, sx, 3.85, 2.4, 0x5a6470);
+      b.add(new THREE.ConeGeometry(0.32, 0.6, 10), dark, sx, 3.85, 4.15, Math.PI / 2, 0, 0);
+    }
+    b.box(0.32, 4.2, 3.0, 0, 5.6, -7.6, color);
+    b.box(8.4, 0.22, 2.0, 0, 7.6, -8.0, color);
+    b.box(3.02, 0.5, 9, 0, 2.2, 0, 0x2f5a8a);
+    b.box(0.2, 1.5, 0.2, 1.3, 0.9, -1.2, dark); b.box(0.2, 1.5, 0.2, -1.3, 0.9, -1.2, dark); b.box(0.2, 1.2, 0.2, 0, 1.0, 6.4, dark);
+    addWheel(1.45, -0.6, 0.55, 0.4, false); addWheel(-1.45, -0.6, 0.55, 0.4, false); addWheel(1.45, -1.9, 0.55, 0.4, false); addWheel(-1.45, -1.9, 0.55, 0.4, false);
+    addWheel(0, 6.4, 0.42, 0.3, true);
+    glow.box(0.2, 0.15, 0.4, 11, 4.25, 1.0, 0x20ff40); glow.box(0.2, 0.15, 0.4, -11, 4.25, 1.0, 0xff2020);
+    glow.box(0.15, 0.15, 0.15, 0, 7.8, -8.9, 0xffffff);
+    extras.props = [];
+    for (const sx of [-4.6, 4.6]) {
+      const pb = new Builder();
+      pb.box(0.2, 3.4, 0.08, 0, 0, 0, 0x1a1a1a);
+      pb.box(3.4, 0.2, 0.08, 0, 0, 0, 0x1a1a1a);
+      const prop = new THREE.Mesh(pb.build(), vehMat);
+      prop.position.set(sx, 3.85, 4.1);
+      group.add(prop);
+      extras.props.push(prop);
+    }
   } else if (def.shape === 'heli') {
     b.add(UNIT_SPHERE, color, 0, 1.5, 0.6, 0, 0, 0, 2.2, 2.0, 4.2);
     b.add(UNIT_SPHERE, glass, 0, 1.75, 1.7, 0, 0, 0, 1.7, 1.3, 2.0);
