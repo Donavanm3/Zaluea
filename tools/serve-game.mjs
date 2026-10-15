@@ -14,7 +14,13 @@ const TYPES = {
 };
 
 http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let p;
+  try {
+    p = decodeURIComponent((req.url || '/').split(/[?#]/)[0]);
+  } catch (e) {
+    res.writeHead(400).end();
+    return;
+  }
   if (p.endsWith('/')) p += 'index.html';
   const file = path.join(ROOT, p);
   if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
